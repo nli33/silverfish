@@ -2,13 +2,6 @@
 
 package engine
 
-const (
-	WhiteKingside uint8 = 1 << iota
-	WhiteQueenside
-	BlackKingside
-	BlackQueenside
-)
-
 type Position struct {
 	Turn           uint8
 	Pieces         [2][6]Bitboard

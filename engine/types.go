@@ -132,6 +132,13 @@ const (
 var BishopAttacks = []int8{NorthEast, SouthWest, NorthWest, SouthWest}
 var RookAttacks = []int8{North, South, East, West}
 
+const (
+	WhiteKingside uint8 = 1 << iota
+	WhiteQueenside
+	BlackKingside
+	BlackQueenside
+)
+
 var Default = [2][6]Bitboard{
 	{
 		Bitboard(0b00000000_00000000_00000000_00000000_00000000_00000000_11111111_00000000),
