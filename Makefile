@@ -1,7 +1,7 @@
 BIN_DIR := bin
 BINARY := silverfish
 
-.PHONY: build run test
+.PHONY: build run test clean
 
 build:
 	go build -o $(BIN_DIR)/$(BINARY) silverfish/cmd/$(BINARY)
