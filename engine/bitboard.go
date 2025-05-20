@@ -1,5 +1,11 @@
 package engine
 
+import (
+	"errors"
+	"math/bits"
+	"math/rand/v2"
+)
+
 type Bitboard uint64
 
 // occupied squares
@@ -7,9 +13,9 @@ type Bitboard uint64
 
 type MagicEntry struct {
 	// ((occupied & mask) * Magic) >> (64 - Index_bits) = index
-	Mask       Bitboard
-	Magic      uint64
-	Index_bits uint8
+	Mask      Bitboard
+	Magic     uint64
+	IndexBits uint8
 }
 
 var RookMagics [64]MagicEntry
@@ -19,33 +25,79 @@ var BishopMoves [64][]Bitboard
 
 // RookMoves: {64 : [magicindex : attackset]}
 
-func MagicIndex(entry MagicEntry, occupied Bitboard) uint64 {
-	return (uint64(occupied&entry.Mask) * entry.Magic) >> (64 - entry.Index_bits)
+func MagicIndex(entry MagicEntry, blockers Bitboard) uint64 {
+	return (uint64(blockers&entry.Mask) * entry.Magic) >> (64 - entry.IndexBits)
 }
 
-func GenRookMoves(square Square, occupied Bitboard) Bitboard {
+func GenRookMoves(square Square, blockers Bitboard) Bitboard {
 	magic := RookMagics[square]
 	moves := RookMoves[square]
-	return moves[MagicIndex(magic, occupied)]
+	return moves[MagicIndex(magic, blockers)]
 }
 
-func FindMagic(piece uint8, square Square, indexBits uint8) {
-
+func GenBishopMoves(square Square, blockers Bitboard) Bitboard {
+	magic := BishopMagics[square]
+	moves := BishopMoves[square]
+	return moves[MagicIndex(magic, blockers)]
 }
 
-func SlidingAttack(piece uint8, square Square) Bitboard {
+func findMagic(piece uint8, square Square) (MagicEntry, []Bitboard) {
+	relevantMask := SliderBlockerMask(piece, square)
+	indexBits := uint8(bits.OnesCount64(uint64(relevantMask)))
+	for {
+		magic := rand.Uint64() & rand.Uint64() & rand.Uint64()
+		entry := MagicEntry{relevantMask, magic, indexBits}
+		table, err := makeMoveTable(piece, square, entry)
+		if err == nil { // OK
+			return entry, table
+		}
+	}
+}
+
+func makeMoveTable(piece uint8, square Square, entry MagicEntry) ([]Bitboard, error) {
+	table := make([]Bitboard, 1<<entry.IndexBits)
+	for _, blockers := range Subsets(entry.Mask) {
+		moves := SliderAttacks(piece, square, blockers)
+		tableEntry := &table[MagicIndex(entry, blockers)]
+		if *tableEntry == BB_Empty {
+			*tableEntry = moves
+		} else if *tableEntry != moves {
+			return nil, errors.New("hash collision")
+		}
+	}
+	return table, nil
+}
+
+// List all subsets of set bits of a bitboard
+func Subsets(mask Bitboard) []Bitboard {
+	bb := BB_Empty
+	var maskSubsets []Bitboard
+	for {
+		maskSubsets = append(maskSubsets, bb)
+		bb = (bb - mask) & mask
+		if bb == 0 {
+			break
+		}
+	}
+	return maskSubsets
+}
+
+// Create mask of relevant blockers
+func SliderBlockerMask(piece uint8, square Square) Bitboard {
 	var attacks []int8
 	if piece == Bishop {
-		attacks = []int8{NorthEast, SouthEast, NorthWest, SouthWest}
+		attacks = BishopAttacks
 	} else if piece == Rook {
-		attacks = []int8{North, South, East, West}
+		attacks = RookAttacks
 	} else {
-		return Bitboard(0)
+		return BB_Empty
 	}
-	bitboard := Bitboard(0)
-	var edgeMask Bitboard
 
+	bb := BB_Empty
+	var edgeMask Bitboard
 	for _, d := range attacks {
+		// Block only the edge relevant to current direction
+		// Avoid blocking all squares along an edge for a rook on the edge
 		switch d {
 		case North:
 			edgeMask = BB_Rank8
@@ -58,21 +110,71 @@ func SlidingAttack(piece uint8, square Square) Bitboard {
 		default:
 			edgeMask = BB_Edges
 		}
-
 		sq := square
 		for {
 			next := Square(int8(sq) + d)
+			// Check for out of bounds
 			if !IsValid(next) || Distance(next, sq) > 1 {
 				break
 			}
-			// if next is the “true” edge in this direction, stop *before* adding:
-			if (Bitboard(1)<<next)&edgeMask != 0 {
+			// Remove current direction's edge from mask
+			if (1<<next)&edgeMask != 0 {
 				break
 			}
 			sq = next
-			bitboard |= (1 << sq)
+			bb |= (1 << sq)
 		}
 	}
-	bitboard &^= Bitboard(1 << square)
-	return bitboard
+	bb &^= Bitboard(1 << square)
+	return bb
+}
+
+// Bitboard of valid slider attacks given blocker arrangement
+// Include the first blocker (if any) in each direction since it may be a vaid capture
+// Check the move for validity later on
+func SliderAttacks(piece uint8, square Square, blockers Bitboard) Bitboard {
+	var attacks []int8
+	if piece == Bishop {
+		attacks = BishopAttacks
+	} else if piece == Rook {
+		attacks = RookAttacks
+	} else {
+		return BB_Empty
+	}
+
+	bb := BB_Empty
+	for _, d := range attacks {
+		sq := square
+		for {
+			next := Square(int8(sq) + d)
+			// Check for out of bounds
+			if !IsValid(next) || Distance(next, sq) > 1 {
+				break
+			}
+			// Include the first blocker
+			bb |= (1 << next)
+			// Check for blocker
+			if blockers&(1<<next) != 0 {
+				break
+			}
+			sq = next
+		}
+	}
+	bb &^= Bitboard(1 << square)
+	return bb
+}
+
+func InitBitboard() {
+	// Rooks
+	for sq := SquareA1; sq <= SquareH8; sq++ {
+		entry, table := findMagic(Rook, sq)
+		RookMagics[sq] = entry
+		RookMoves[sq] = table
+	}
+	// Bishops
+	for sq := SquareA1; sq <= SquareH8; sq++ {
+		entry, table := findMagic(Bishop, sq)
+		BishopMagics[sq] = entry
+		BishopMoves[sq] = table
+	}
 }

@@ -129,7 +129,7 @@ const (
 	SouthWest = South + West
 )
 
-var BishopAttacks = []int8{NorthEast, SouthWest, NorthWest, SouthWest}
+var BishopAttacks = []int8{NorthEast, SouthEast, NorthWest, SouthWest}
 var RookAttacks = []int8{North, South, East, West}
 
 const (
@@ -163,6 +163,8 @@ const BB_Rank1 = Bitboard(0b00000000_00000000_00000000_00000000_00000000_0000000
 const BB_Rank8 = Bitboard(0b11111111_00000000_00000000_00000000_00000000_00000000_00000000_00000000)
 const BB_FileA = Bitboard(0b00000001_00000001_00000001_00000001_00000001_00000001_00000001_00000001)
 const BB_FileH = Bitboard(0b10000000_10000000_10000000_10000000_10000000_10000000_10000000_10000000)
+const BB_Empty = Bitboard(0)
+const BB_Full = Bitboard(0xffffffffffffffff)
 
 // rows
 func RankOf(square Square) uint8 {
@@ -196,11 +198,11 @@ func Distance(x Square, y Square) int {
 	)
 }
 
-func PrintBB(bb Bitboard) string {
+func (bb *Bitboard) ToString() string {
 	var bbString string
 	for i := 7; i >= 0; i-- {
 		for j := 0; j <= 7; j++ {
-			if bb&(1<<(i*8+j)) == 0 {
+			if *bb&(1<<(i*8+j)) == 0 {
 				bbString += "0 "
 			} else {
 				bbString += "1 "
@@ -208,6 +210,9 @@ func PrintBB(bb Bitboard) string {
 		}
 		bbString += "\n"
 	}
-	fmt.Println(bbString)
 	return bbString
+}
+
+func (bb *Bitboard) ToStringSmall() string {
+	return fmt.Sprintf("%064b", uint64(*bb))
 }

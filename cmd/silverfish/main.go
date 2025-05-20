@@ -6,4 +6,5 @@ import (
 
 func main() {
 	engine.Init()
+	engine.InitBitboard()
 }
