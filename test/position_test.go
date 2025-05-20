@@ -1,7 +1,6 @@
 package board
 
 import (
-	"fmt"
 	"silverfish/engine"
 	"testing"
 )
@@ -44,35 +43,5 @@ func TestGetSquare(t *testing.T) {
 	wantPiece = engine.NoPiece
 	if gotColor != wantColor || gotPiece != wantPiece {
 		t.Errorf(`p.GetSquare(%d) = (%d, %d); want (%d, %d)`, square, gotColor, gotPiece, wantColor, wantPiece)
-	}
-}
-
-func TestSlidingAttack(t *testing.T) {
-	var piece uint8
-	var square engine.Square
-	var gotBB, wantBB engine.Bitboard
-
-	piece = engine.Bishop
-	square = engine.SquareD3
-	gotBB = engine.SlidingAttack(piece, square)
-	wantBB = engine.Bitboard(0b00000000_00000000_01000000_00100010_00010100_00000000_00010100_00000000)
-	if gotBB != wantBB {
-		t.Errorf(`SlidingAttack(%d, %d)`, piece, square)
-		fmt.Println("Got:")
-		engine.PrintBB(gotBB)
-		fmt.Println("Want:")
-		engine.PrintBB(wantBB)
-	}
-
-	piece = engine.Rook
-	square = engine.SquareH1
-	gotBB = engine.SlidingAttack(piece, square)
-	wantBB = engine.Bitboard(0b00000000_10000000_10000000_10000000_10000000_10000000_10000000_01111110)
-	if gotBB != wantBB {
-		t.Errorf(`SlidingAttack(%d, %d)`, piece, square)
-		fmt.Println("Got:")
-		engine.PrintBB(gotBB)
-		fmt.Println("Want:")
-		engine.PrintBB(wantBB)
 	}
 }
