@@ -172,8 +172,6 @@ func SliderAttacks(piece uint8, square Square, blockers Bitboard) Bitboard {
 func findKnightMoves(square Square) Bitboard {
 	mask_1 := Bitboard(0b00001010)
 	mask_2 := Bitboard(0b00010001)
-	mask_3 := Bitboard(0b00010001)
-	mask_4 := Bitboard(0b00001010)
 	range_mask := Bitboard(0b11111111)
 
 	file := FileOf(square)
@@ -182,16 +180,12 @@ func findKnightMoves(square Square) Bitboard {
 	if file <= FileB {
 		mask_1 >>= (2 - file)
 		mask_2 >>= (2 - file)
-		mask_3 >>= (2 - file)
-		mask_4 >>= (2 - file)
 	} else if file >= FileD {
 		mask_1 = (mask_1 << (file - 2)) & range_mask
 		mask_2 = (mask_2 << (file - 2)) & range_mask
-		mask_3 = (mask_3 << (file - 2)) & range_mask
-		mask_4 = (mask_4 << (file - 2)) & range_mask
 	}
 
-	bb := (mask_1 << 32) | (mask_2 << 24) | (mask_3 << 8) | mask_4
+	bb := (mask_1 << 32) | (mask_2 << 24) | (mask_2 << 8) | mask_1
 
 	if rank <= Rank2 {
 		bb >>= (2 - rank) * 8
