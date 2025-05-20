@@ -22,6 +22,7 @@ var RookMagics [64]MagicEntry
 var BishopMagics [64]MagicEntry
 var RookMoves [64][]Bitboard
 var BishopMoves [64][]Bitboard
+var KnightMoves [64]Bitboard
 
 // RookMoves: {64 : [magicindex : attackset]}
 
@@ -39,6 +40,10 @@ func GenBishopMoves(square Square, blockers Bitboard) Bitboard {
 	magic := BishopMagics[square]
 	moves := BishopMoves[square]
 	return moves[MagicIndex(magic, blockers)]
+}
+
+func GenKnightMoves(square Square) Bitboard {
+	return KnightMoves[square]
 }
 
 func findMagic(piece uint8, square Square) (MagicEntry, []Bitboard) {
@@ -164,17 +169,51 @@ func SliderAttacks(piece uint8, square Square, blockers Bitboard) Bitboard {
 	return bb
 }
 
+func findKnightMoves(square Square) Bitboard {
+	mask_1 := Bitboard(0b00001010)
+	mask_2 := Bitboard(0b00010001)
+	mask_3 := Bitboard(0b00010001)
+	mask_4 := Bitboard(0b00001010)
+	range_mask := Bitboard(0b11111111)
+
+	file := FileOf(square)
+	rank := RankOf(square)
+
+	if file <= FileB {
+		mask_1 >>= (2 - file)
+		mask_2 >>= (2 - file)
+		mask_3 >>= (2 - file)
+		mask_4 >>= (2 - file)
+	} else if file >= FileD {
+		mask_1 = (mask_1 << (file - 2)) & range_mask
+		mask_2 = (mask_2 << (file - 2)) & range_mask
+		mask_3 = (mask_3 << (file - 2)) & range_mask
+		mask_4 = (mask_4 << (file - 2)) & range_mask
+	}
+
+	bb := (mask_1 << 32) | (mask_2 << 24) | (mask_3 << 8) | mask_4
+
+	if rank <= Rank2 {
+		bb >>= (2 - rank) * 8
+	} else if rank >= Rank4 {
+		bb = (bb << ((rank - 2) * 8)) & BB_Full
+	}
+
+	return bb
+}
+
 func InitBitboard() {
 	// Rooks
 	for sq := SquareA1; sq <= SquareH8; sq++ {
 		entry, table := findMagic(Rook, sq)
 		RookMagics[sq] = entry
 		RookMoves[sq] = table
-	}
-	// Bishops
-	for sq := SquareA1; sq <= SquareH8; sq++ {
-		entry, table := findMagic(Bishop, sq)
+
+		entry, table = findMagic(Bishop, sq)
 		BishopMagics[sq] = entry
 		BishopMoves[sq] = table
+
+		moves := findKnightMoves(sq)
+		KnightMoves[sq] = moves
 	}
 }

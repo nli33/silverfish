@@ -129,7 +129,6 @@ func TestSliderAttacks(t *testing.T) {
 }
 
 func TestMagicBitboard(t *testing.T) {
-	engine.InitBitboard()
 	var square engine.Square
 	var blockers, gotBB, wantBB engine.Bitboard
 
@@ -227,4 +226,43 @@ func TestMagicBitboard(t *testing.T) {
 		fmt.Printf("Want:\n%s\n", wantBB.ToString())
 		fmt.Printf("Blockers:\n%s\n", blockers.ToString())
 	}
+}
+
+func TestKnightMoves(t *testing.T) {
+	var square engine.Square
+	var gotBB, wantBB engine.Bitboard
+
+	// 6 destination squares
+	square = engine.SquareB4
+	gotBB = engine.GenKnightMoves(square)
+	wantBB = engine.Bitboard(0b00000000_00000000_00000101_00001000_00000000_00001000_00000101_00000000)
+	if gotBB != wantBB {
+		t.Errorf(`TestKnightMoves(%d)`, square)
+		fmt.Printf("Got:\n%s\n", gotBB.ToString())
+		fmt.Printf("Want:\n%s\n", wantBB.ToString())
+	}
+
+	// 3 destination squares
+	square = engine.SquareG1
+	gotBB = engine.GenKnightMoves(square)
+	wantBB = engine.Bitboard(0b00000000_00000000_00000000_00000000_00000000_10100000_00010000_00000000)
+	if gotBB != wantBB {
+		t.Errorf(`TestKnightMoves(%d)`, square)
+		fmt.Printf("Got:\n%s\n", gotBB.ToString())
+		fmt.Printf("Want:\n%s\n", wantBB.ToString())
+	}
+
+	// 8 destination squares
+	square = engine.SquareD6
+	gotBB = engine.GenKnightMoves(square)
+	wantBB = engine.Bitboard(0b00010100_00100010_00000000_00100010_00010100_00000000_00000000_00000000)
+	if gotBB != wantBB {
+		t.Errorf(`TestKnightMoves(%d)`, square)
+		fmt.Printf("Got:\n%s\n", gotBB.ToString())
+		fmt.Printf("Want:\n%s\n", wantBB.ToString())
+	}
+}
+
+func init() {
+	engine.InitBitboard()
 }
