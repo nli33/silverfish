@@ -7,9 +7,7 @@ import (
 
 type Bitboard uint64
 
-// occupied squares
 // mask: possibly relevant blockers
-
 type MagicEntry struct {
 	// ((occupied & mask) * Magic) >> (64 - Index_bits) = index
 	Mask      Bitboard
@@ -17,14 +15,11 @@ type MagicEntry struct {
 	IndexBits uint8
 }
 
-var RookMagics [64]MagicEntry
-var BishopMagics [64]MagicEntry
+// takes around 7 mb memory
 var RookMoves [64][]Bitboard
 var BishopMoves [64][]Bitboard
 var KnightMoves [64]Bitboard
 var KingMoves [64]Bitboard
-
-// RookMoves: {64 : [magicindex : attackset]}
 
 func MagicIndex(entry MagicEntry, blockers Bitboard) uint64 {
 	return (uint64(blockers&entry.Mask) * entry.Magic) >> (64 - entry.IndexBits)
@@ -50,7 +45,7 @@ func GenKingMoves(square Square) Bitboard {
 	return KingMoves[square]
 }
 
-func findMagic(piece uint8, square Square) (MagicEntry, []Bitboard) {
+func FindMagic(piece uint8, square Square) (MagicEntry, []Bitboard) {
 	relevantMask := SliderBlockerMask(piece, square)
 	indexBits := uint8(bits.OnesCount64(uint64(relevantMask)))
 	for {
@@ -198,12 +193,10 @@ func findKnightMoves(square Square) Bitboard {
 func InitBitboard() {
 	// pre-generate magic bitboards and move sets
 	for sq := SquareA1; sq <= SquareH8; sq++ {
-		entry, table := findMagic(Rook, sq)
-		RookMagics[sq] = entry
+		table, _ := makeMoveTable(Rook, sq, RookMagics[sq])
 		RookMoves[sq] = table
 
-		entry, table = findMagic(Bishop, sq)
-		BishopMagics[sq] = entry
+		table, _ = makeMoveTable(Bishop, sq, BishopMagics[sq])
 		BishopMoves[sq] = table
 
 		KnightMoves[sq] = findKnightMoves(sq)

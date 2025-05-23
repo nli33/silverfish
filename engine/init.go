@@ -5,7 +5,7 @@ import (
 	"math/rand"
 )
 
-var Rng *rand.Rand = rand.New(rand.NewSource(14))
+var Rng *rand.Rand = rand.New(rand.NewSource(123))
 
 func Init() {
 	fmt.Println("HELLO")
