@@ -263,6 +263,38 @@ func TestKnightMoves(t *testing.T) {
 	}
 }
 
+func TestKingMoves(t *testing.T) {
+	var square engine.Square
+	var gotBB, wantBB engine.Bitboard
+
+	square = engine.SquareG7
+	gotBB = engine.GenKingMoves(square)
+	wantBB = engine.Bitboard(0b11100000_10100000_11100000_00000000_00000000_00000000_00000000_00000000)
+	if gotBB != wantBB {
+		t.Errorf(`TestKingMoves(%d)`, square)
+		fmt.Printf("Got:\n%s\n", gotBB.ToString())
+		fmt.Printf("Want:\n%s\n", wantBB.ToString())
+	}
+
+	square = engine.SquareE1
+	gotBB = engine.GenKingMoves(square)
+	wantBB = engine.Bitboard(0b00000000_00000000_00000000_00000000_00000000_00000000_00111000_00101000)
+	if gotBB != wantBB {
+		t.Errorf(`TestKingMoves(%d)`, square)
+		fmt.Printf("Got:\n%s\n", gotBB.ToString())
+		fmt.Printf("Want:\n%s\n", wantBB.ToString())
+	}
+
+	square = engine.SquareA8
+	gotBB = engine.GenKingMoves(square)
+	wantBB = engine.Bitboard(0b00000010_00000011_00000000_00000000_00000000_00000000_00000000_00000000)
+	if gotBB != wantBB {
+		t.Errorf(`TestKingMoves(%d)`, square)
+		fmt.Printf("Got:\n%s\n", gotBB.ToString())
+		fmt.Printf("Want:\n%s\n", wantBB.ToString())
+	}
+}
+
 func init() {
 	engine.InitBitboard()
 }

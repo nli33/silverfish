@@ -23,6 +23,7 @@ var BishopMagics [64]MagicEntry
 var RookMoves [64][]Bitboard
 var BishopMoves [64][]Bitboard
 var KnightMoves [64]Bitboard
+var KingMoves [64]Bitboard
 
 // RookMoves: {64 : [magicindex : attackset]}
 
@@ -44,6 +45,10 @@ func GenBishopMoves(square Square, blockers Bitboard) Bitboard {
 
 func GenKnightMoves(square Square) Bitboard {
 	return KnightMoves[square]
+}
+
+func GenKingMoves(square Square) Bitboard {
+	return KingMoves[square]
 }
 
 func findMagic(piece uint8, square Square) (MagicEntry, []Bitboard) {
@@ -169,6 +174,16 @@ func SliderAttacks(piece uint8, square Square, blockers Bitboard) Bitboard {
 	return bb
 }
 
+func findKingMoves(square Square) Bitboard {
+	bb := BB_Empty
+	for dest := SquareA1; dest <= SquareH8; dest++ {
+		if Distance(square, dest) == 1 {
+			bb |= 1 << dest
+		}
+	}
+	return bb
+}
+
 func findKnightMoves(square Square) Bitboard {
 	bb := BB_Empty
 	for dest := SquareA1; dest <= SquareH8; dest++ {
@@ -182,7 +197,7 @@ func findKnightMoves(square Square) Bitboard {
 }
 
 func InitBitboard() {
-	// Rooks
+	// pre-generate magic bitboards and move sets
 	for sq := SquareA1; sq <= SquareH8; sq++ {
 		entry, table := findMagic(Rook, sq)
 		RookMagics[sq] = entry
@@ -192,7 +207,8 @@ func InitBitboard() {
 		BishopMagics[sq] = entry
 		BishopMoves[sq] = table
 
-		moves := findKnightMoves(sq)
-		KnightMoves[sq] = moves
+		KnightMoves[sq] = findKnightMoves(sq)
+
+		KingMoves[sq] = findKingMoves(sq)
 	}
 }
