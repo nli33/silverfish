@@ -3,7 +3,6 @@ package engine
 import (
 	"errors"
 	"math/bits"
-	"math/rand/v2"
 )
 
 type Bitboard uint64
@@ -55,7 +54,7 @@ func findMagic(piece uint8, square Square) (MagicEntry, []Bitboard) {
 	relevantMask := SliderBlockerMask(piece, square)
 	indexBits := uint8(bits.OnesCount64(uint64(relevantMask)))
 	for {
-		magic := rand.Uint64() & rand.Uint64() & rand.Uint64()
+		magic := Rng.Uint64() & Rng.Uint64() & Rng.Uint64()
 		entry := MagicEntry{relevantMask, magic, indexBits}
 		table, err := makeMoveTable(piece, square, entry)
 		if err == nil { // OK
