@@ -170,29 +170,14 @@ func SliderAttacks(piece uint8, square Square, blockers Bitboard) Bitboard {
 }
 
 func findKnightMoves(square Square) Bitboard {
-	mask_1 := Bitboard(0b00001010)
-	mask_2 := Bitboard(0b00010001)
-	range_mask := Bitboard(0b11111111)
-
-	file := FileOf(square)
-	rank := RankOf(square)
-
-	if file <= FileB {
-		mask_1 >>= (2 - file)
-		mask_2 >>= (2 - file)
-	} else if file >= FileD {
-		mask_1 = (mask_1 << (file - 2)) & range_mask
-		mask_2 = (mask_2 << (file - 2)) & range_mask
+	bb := BB_Empty
+	for dest := SquareA1; dest <= SquareH8; dest++ {
+		hDist := Abs(int(FileOf(dest)) - int(FileOf(square)))
+		vDist := Abs(int(RankOf(dest)) - int(RankOf(square)))
+		if Distance(square, dest) == 2 && (hDist == 2 && vDist == 1 || hDist == 1 && vDist == 2) {
+			bb |= 1 << dest
+		}
 	}
-
-	bb := (mask_1 << 32) | (mask_2 << 24) | (mask_2 << 8) | mask_1
-
-	if rank <= Rank2 {
-		bb >>= (2 - rank) * 8
-	} else if rank >= Rank4 {
-		bb = (bb << ((rank - 2) * 8)) & BB_Full
-	}
-
 	return bb
 }
 
