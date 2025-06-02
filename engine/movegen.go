@@ -1,6 +1,6 @@
 package engine
 
-func GenPieceMoves(pos Position) []Move {
+func GenPieceMoves(pos Position, color uint8) []Move {
 	var moveList []Move
 
 	us := pos.Turn
@@ -11,7 +11,7 @@ func GenPieceMoves(pos Position) []Move {
 		pieceBB := pos.Pieces[us][piece]
 		for pieceBB != 0 {
 			from := PopLsb(&pieceBB)
-			movesBB := GetMoves(piece, from, blockers)
+			movesBB := GetMoves(piece, from, blockers, color)
 			for movesBB != 0 {
 				to := PopLsb(&movesBB)
 				moveList = append(moveList, NewMove(from, to))
@@ -22,11 +22,11 @@ func GenPieceMoves(pos Position) []Move {
 	return moveList
 }
 
-func GetMoves(piece uint8, square Square, blockers Bitboard) Bitboard {
+func GetMoves(piece uint8, square Square, blockers Bitboard, color uint8) Bitboard {
 	switch piece {
 	case Pawn:
 		// TODO: pawn move generation
-		return Bitboard(0)
+		return GetPawnMoves(square, color)
 	case Knight:
 		return GetKnightMoves(square)
 	case Bishop:
@@ -59,4 +59,47 @@ func GetKnightMoves(square Square) Bitboard {
 
 func GetKingMoves(square Square) Bitboard {
 	return KingMoves[square]
+}
+
+func GetPawnMoves(square Square, color uint8) Bitboard {
+	bb := BB_Empty
+
+	switch color {
+	case White:
+		if RankOf(square) == Rank2 {
+			rank := Rank3
+			file := FileOf(square)
+			dest := rank * 8 + file
+			bb |= 1 << dest
+
+			rank += 1
+			dest = rank * 8 + file
+			bb |= 1 << dest
+		} else {
+			rank := RankOf(square) + 1
+			file := FileOf(square)
+
+			dest := rank * 8 + file
+			bb |= 1 << dest
+		}
+	case Black:
+		if RankOf(square) == Rank7 {
+			rank := Rank6
+			file := FileOf(square)
+			dest := rank * 8 + file
+			bb |= 1 << dest
+
+			rank -= 1
+			dest = rank * 8 + file
+			bb |= 1 << dest
+		} else {
+			rank := RankOf(square) - 1
+			file := FileOf(square)
+
+			dest := rank * 8 + file
+			bb |= 1 << dest
+		}
+	}
+
+	return bb
 }
