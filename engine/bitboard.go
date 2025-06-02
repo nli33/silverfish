@@ -25,26 +25,6 @@ func MagicIndex(entry MagicEntry, blockers Bitboard) uint64 {
 	return (uint64(blockers&entry.Mask) * entry.Magic) >> (64 - entry.IndexBits)
 }
 
-func GenRookMoves(square Square, blockers Bitboard) Bitboard {
-	magic := RookMagics[square]
-	moves := RookMoves[square]
-	return moves[MagicIndex(magic, blockers)]
-}
-
-func GenBishopMoves(square Square, blockers Bitboard) Bitboard {
-	magic := BishopMagics[square]
-	moves := BishopMoves[square]
-	return moves[MagicIndex(magic, blockers)]
-}
-
-func GenKnightMoves(square Square) Bitboard {
-	return KnightMoves[square]
-}
-
-func GenKingMoves(square Square) Bitboard {
-	return KingMoves[square]
-}
-
 func FindMagic(piece uint8, square Square) (MagicEntry, []Bitboard) {
 	relevantMask := SliderBlockerMask(piece, square)
 	indexBits := uint8(bits.OnesCount64(uint64(relevantMask)))
@@ -90,9 +70,9 @@ func Subsets(mask Bitboard) []Bitboard {
 func SliderBlockerMask(piece uint8, square Square) Bitboard {
 	var attacks []int8
 	if piece == Bishop {
-		attacks = BishopAttacks
+		attacks = BishopDirections
 	} else if piece == Rook {
-		attacks = RookAttacks
+		attacks = RookDirections
 	} else {
 		return BB_Empty
 	}
@@ -122,11 +102,11 @@ func SliderBlockerMask(piece uint8, square Square) Bitboard {
 				break
 			}
 			// Remove current direction's edge from mask
-			if (1<<next)&edgeMask != 0 {
+			if 1<<next&edgeMask != 0 {
 				break
 			}
 			sq = next
-			bb |= (1 << sq)
+			bb |= 1 << sq
 		}
 	}
 	bb &^= Bitboard(1 << square)
@@ -139,9 +119,9 @@ func SliderBlockerMask(piece uint8, square Square) Bitboard {
 func SliderAttacks(piece uint8, square Square, blockers Bitboard) Bitboard {
 	var attacks []int8
 	if piece == Bishop {
-		attacks = BishopAttacks
+		attacks = BishopDirections
 	} else if piece == Rook {
-		attacks = RookAttacks
+		attacks = RookDirections
 	} else {
 		return BB_Empty
 	}
@@ -156,9 +136,9 @@ func SliderAttacks(piece uint8, square Square, blockers Bitboard) Bitboard {
 				break
 			}
 			// Include the first blocker
-			bb |= (1 << next)
+			bb |= 1 << next
 			// Check for blocker
-			if blockers&(1<<next) != 0 {
+			if 1<<next&blockers != 0 {
 				break
 			}
 			sq = next
@@ -168,7 +148,7 @@ func SliderAttacks(piece uint8, square Square, blockers Bitboard) Bitboard {
 	return bb
 }
 
-func findKingMoves(square Square) Bitboard {
+func initKingMoves(square Square) Bitboard {
 	bb := BB_Empty
 	for dest := SquareA1; dest <= SquareH8; dest++ {
 		if Distance(square, dest) == 1 {
@@ -178,7 +158,7 @@ func findKingMoves(square Square) Bitboard {
 	return bb
 }
 
-func findKnightMoves(square Square) Bitboard {
+func initKnightMoves(square Square) Bitboard {
 	bb := BB_Empty
 	for dest := SquareA1; dest <= SquareH8; dest++ {
 		hDist := Abs(int(FileOf(dest)) - int(FileOf(square)))
@@ -190,6 +170,24 @@ func findKnightMoves(square Square) Bitboard {
 	return bb
 }
 
+func Lsb(bb Bitboard) Square {
+	return Square(bits.TrailingZeros(uint(bb)))
+}
+
+func PopLsb(bb *Bitboard) Square {
+	lsb := Lsb(*bb)
+	*bb &= *bb - 1
+	return lsb
+}
+
+func Merge(bbs []Bitboard) Bitboard {
+	result := Bitboard(0)
+	for _, bb := range bbs {
+		result |= bb
+	}
+	return result
+}
+
 func InitBitboard() {
 	// pre-generate magic bitboards and move sets
 	for sq := SquareA1; sq <= SquareH8; sq++ {
@@ -199,8 +197,8 @@ func InitBitboard() {
 		table, _ = makeMoveTable(Bishop, sq, BishopMagics[sq])
 		BishopMoves[sq] = table
 
-		KnightMoves[sq] = findKnightMoves(sq)
+		KnightMoves[sq] = initKnightMoves(sq)
 
-		KingMoves[sq] = findKingMoves(sq)
+		KingMoves[sq] = initKingMoves(sq)
 	}
 }
