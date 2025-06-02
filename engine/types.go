@@ -129,8 +129,8 @@ const (
 	SouthWest = South + West
 )
 
-var BishopAttacks = []int8{NorthEast, SouthEast, NorthWest, SouthWest}
-var RookAttacks = []int8{North, South, East, West}
+var BishopDirections = []int8{NorthEast, SouthEast, NorthWest, SouthWest}
+var RookDirections = []int8{North, South, East, West}
 
 const (
 	WhiteKingside uint8 = 1 << iota
@@ -177,7 +177,7 @@ func FileOf(square Square) uint8 {
 }
 
 func NewSquare(rank uint8, file uint8) Square {
-	return Square((rank << 3) + file)
+	return Square(rank<<3 + file)
 }
 
 func IsValid(square Square) bool {

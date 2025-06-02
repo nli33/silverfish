@@ -16,10 +16,10 @@ func NewPosition() *Position {
 
 func StartingPosition() *Position {
 	p := Position{
-		0,
-		Default,
-		0b00001111,
-		0,
+		Turn:           0,
+		Pieces:         Default,
+		CastlingRights: 0b00001111,
+		Rule50:         0,
 	}
 	return &p
 }
@@ -42,8 +42,8 @@ func (pos *Position) GetSquare(square Square) (uint8, uint8) {
 }
 
 func (pos *Position) IsLegal(move Move) bool {
-	var fromColor, fromPiece = pos.GetSquare(move.FromSquare)
-	var toColor, toPiece = pos.GetSquare(move.ToSquare)
+	var fromColor, fromPiece = pos.GetSquare(move.From())
+	var toColor, toPiece = pos.GetSquare(move.To())
 
 	if fromColor != pos.Turn {
 		return false

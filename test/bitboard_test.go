@@ -134,7 +134,7 @@ func TestMagicBitboard(t *testing.T) {
 
 	square = engine.SquareD4
 	blockers = engine.BB_Empty
-	gotBB = engine.GenRookMoves(square, blockers)
+	gotBB = engine.GetRookMoves(square, blockers)
 	wantBB = engine.Bitboard(0b00001000_00001000_00001000_00001000_11110111_00001000_00001000_00001000)
 	if gotBB != wantBB {
 		t.Errorf(`MagicBitboard(%d, %d)`, square, blockers)
@@ -146,7 +146,7 @@ func TestMagicBitboard(t *testing.T) {
 	// Rook, board is all blockers
 	square = engine.SquareD4
 	blockers = engine.BB_Full &^ (1 << square)
-	gotBB = engine.GenRookMoves(square, blockers)
+	gotBB = engine.GetRookMoves(square, blockers)
 	wantBB = engine.Bitboard(0b00000000_00000000_00000000_00001000_00010100_00001000_00000000_00000000)
 	if gotBB != wantBB {
 		t.Errorf(`MagicBitboard(%d, %d)`, square, blockers)
@@ -158,7 +158,7 @@ func TestMagicBitboard(t *testing.T) {
 	// Rook, all edge blockers
 	square = engine.SquareD4
 	blockers = engine.BB_Edges
-	gotBB = engine.GenRookMoves(square, blockers)
+	gotBB = engine.GetRookMoves(square, blockers)
 	wantBB = engine.Bitboard(0b00001000_00001000_00001000_00001000_11110111_00001000_00001000_00001000)
 	if gotBB != wantBB {
 		t.Errorf(`MagicBitboard(%d, %d)`, square, blockers)
@@ -170,7 +170,7 @@ func TestMagicBitboard(t *testing.T) {
 	// Rook, mix
 	square = engine.SquareD3
 	blockers = engine.Bitboard(0b00001000_00000000_00000000_00000000_00000000_00100001_00000000_01000110)
-	gotBB = engine.GenRookMoves(square, blockers)
+	gotBB = engine.GetRookMoves(square, blockers)
 	wantBB = engine.Bitboard(0b00001000_00001000_00001000_00001000_00001000_00110111_00001000_00001000)
 	if gotBB != wantBB {
 		t.Errorf(`MagicBitboard(%d, %d)`, square, blockers)
@@ -182,7 +182,7 @@ func TestMagicBitboard(t *testing.T) {
 	// Bishop on G6. Adjacent blocker, edge blocker, faraway blocker
 	square = engine.SquareG6
 	blockers = engine.Bitboard(0b00010000_10000000_00000000_00000000_00000000_00001000_00000000_00000000)
-	gotBB = engine.GenBishopMoves(square, blockers)
+	gotBB = engine.GetBishopMoves(square, blockers)
 	wantBB = engine.Bitboard(0b00010000_10100000_00000000_10100000_00010000_00001000_00000000_00000000)
 	if gotBB != wantBB {
 		t.Errorf(`MagicBitboard(%d, %d)`, square, blockers)
@@ -194,7 +194,7 @@ func TestMagicBitboard(t *testing.T) {
 	// Bishop on A1, long diagonal without blockers
 	square = engine.SquareA1
 	blockers = engine.BB_Empty
-	gotBB = engine.GenBishopMoves(square, blockers)
+	gotBB = engine.GetBishopMoves(square, blockers)
 	wantBB = engine.Bitboard(0b10000000_01000000_00100000_00010000_00001000_00000100_00000010_00000000)
 	if gotBB != wantBB {
 		t.Errorf(`MagicBitboard(%d, %d)`, square, blockers)
@@ -206,7 +206,7 @@ func TestMagicBitboard(t *testing.T) {
 	// Bishop, board is all blockers
 	square = engine.SquareE5
 	blockers = engine.BB_Full &^ (1 << square)
-	gotBB = engine.GenBishopMoves(square, blockers)
+	gotBB = engine.GetBishopMoves(square, blockers)
 	wantBB = engine.Bitboard(0b00000000_00000000_00101000_00000000_00101000_00000000_00000000_00000000)
 	if gotBB != wantBB {
 		t.Errorf(`MagicBitboard(%d, %d)`, square, blockers)
@@ -218,7 +218,7 @@ func TestMagicBitboard(t *testing.T) {
 	// Bishop, all edge blockers
 	square = engine.SquareE5
 	blockers = engine.BB_Edges
-	gotBB = engine.GenBishopMoves(square, blockers)
+	gotBB = engine.GetBishopMoves(square, blockers)
 	wantBB = engine.Bitboard(0b10000010_01000100_00101000_00000000_00101000_01000100_10000010_00000001)
 	if gotBB != wantBB {
 		t.Errorf(`MagicBitboard(%d, %d)`, square, blockers)
@@ -234,7 +234,7 @@ func TestKnightMoves(t *testing.T) {
 
 	// 6 destination squares
 	square = engine.SquareB4
-	gotBB = engine.GenKnightMoves(square)
+	gotBB = engine.GetKnightMoves(square)
 	wantBB = engine.Bitboard(0b00000000_00000000_00000101_00001000_00000000_00001000_00000101_00000000)
 	if gotBB != wantBB {
 		t.Errorf(`TestKnightMoves(%d)`, square)
@@ -244,7 +244,7 @@ func TestKnightMoves(t *testing.T) {
 
 	// 3 destination squares
 	square = engine.SquareG1
-	gotBB = engine.GenKnightMoves(square)
+	gotBB = engine.GetKnightMoves(square)
 	wantBB = engine.Bitboard(0b00000000_00000000_00000000_00000000_00000000_10100000_00010000_00000000)
 	if gotBB != wantBB {
 		t.Errorf(`TestKnightMoves(%d)`, square)
@@ -254,7 +254,7 @@ func TestKnightMoves(t *testing.T) {
 
 	// 8 destination squares
 	square = engine.SquareD6
-	gotBB = engine.GenKnightMoves(square)
+	gotBB = engine.GetKnightMoves(square)
 	wantBB = engine.Bitboard(0b00010100_00100010_00000000_00100010_00010100_00000000_00000000_00000000)
 	if gotBB != wantBB {
 		t.Errorf(`TestKnightMoves(%d)`, square)
@@ -268,7 +268,7 @@ func TestKingMoves(t *testing.T) {
 	var gotBB, wantBB engine.Bitboard
 
 	square = engine.SquareG7
-	gotBB = engine.GenKingMoves(square)
+	gotBB = engine.GetKingMoves(square)
 	wantBB = engine.Bitboard(0b11100000_10100000_11100000_00000000_00000000_00000000_00000000_00000000)
 	if gotBB != wantBB {
 		t.Errorf(`TestKingMoves(%d)`, square)
@@ -277,7 +277,7 @@ func TestKingMoves(t *testing.T) {
 	}
 
 	square = engine.SquareE1
-	gotBB = engine.GenKingMoves(square)
+	gotBB = engine.GetKingMoves(square)
 	wantBB = engine.Bitboard(0b00000000_00000000_00000000_00000000_00000000_00000000_00111000_00101000)
 	if gotBB != wantBB {
 		t.Errorf(`TestKingMoves(%d)`, square)
@@ -286,7 +286,7 @@ func TestKingMoves(t *testing.T) {
 	}
 
 	square = engine.SquareA8
-	gotBB = engine.GenKingMoves(square)
+	gotBB = engine.GetKingMoves(square)
 	wantBB = engine.Bitboard(0b00000010_00000011_00000000_00000000_00000000_00000000_00000000_00000000)
 	if gotBB != wantBB {
 		t.Errorf(`TestKingMoves(%d)`, square)
