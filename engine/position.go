@@ -3,10 +3,11 @@
 package engine
 
 type Position struct {
-	Turn           uint8
-	Pieces         [2][6]Bitboard
-	CastlingRights uint8
-	Rule50         uint8
+	Turn            uint8
+	Pieces          [2][6]Bitboard
+	CastlingRights  uint8
+	Rule50          uint8
+	EnPassantSquare Square
 }
 
 func NewPosition() *Position {

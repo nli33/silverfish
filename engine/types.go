@@ -78,6 +78,8 @@ const (
 	SquareF8
 	SquareG8
 	SquareH8
+
+	NoSquare // 64
 )
 
 const (
