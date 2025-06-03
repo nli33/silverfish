@@ -1,17 +1,17 @@
 package engine
 
-func GenPieceMoves(pos Position, color uint8) []Move {
+func GenPieceMoves(pos Position) []Move {
 	var moveList []Move
 
-	us := pos.Turn
-	them := pos.Turn ^ 1
+	us := pos.Turn       // our color
+	them := pos.Turn ^ 1 // opponent color
 	blockers := Merge(pos.Pieces[them][:])
 
 	for piece := Pawn; piece <= King; piece++ {
 		pieceBB := pos.Pieces[us][piece]
 		for pieceBB != 0 {
 			from := PopLsb(&pieceBB)
-			movesBB := GetMoves(piece, from, blockers, color)
+			movesBB := GetMoves(piece, from, blockers, us)
 			for movesBB != 0 {
 				to := PopLsb(&movesBB)
 				moveList = append(moveList, NewMove(from, to))
@@ -69,34 +69,34 @@ func GetPawnMoves(square Square, color uint8) Bitboard {
 		if RankOf(square) == Rank2 {
 			rank := Rank3
 			file := FileOf(square)
-			dest := rank * 8 + file
+			dest := rank*8 + file
 			bb |= 1 << dest
 
 			rank += 1
-			dest = rank * 8 + file
+			dest = rank*8 + file
 			bb |= 1 << dest
 		} else {
 			rank := RankOf(square) + 1
 			file := FileOf(square)
 
-			dest := rank * 8 + file
+			dest := rank*8 + file
 			bb |= 1 << dest
 		}
 	case Black:
 		if RankOf(square) == Rank7 {
 			rank := Rank6
 			file := FileOf(square)
-			dest := rank * 8 + file
+			dest := rank*8 + file
 			bb |= 1 << dest
 
 			rank -= 1
-			dest = rank * 8 + file
+			dest = rank*8 + file
 			bb |= 1 << dest
 		} else {
 			rank := RankOf(square) - 1
 			file := FileOf(square)
 
-			dest := rank * 8 + file
+			dest := rank*8 + file
 			bb |= 1 << dest
 		}
 	}
