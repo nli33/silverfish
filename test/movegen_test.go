@@ -215,6 +215,90 @@ func TestKingMoves(t *testing.T) {
 	}
 }
 
+func TestPawnMoves(t *testing.T) {
+	var square engine.Square
+	var blockers engine.Bitboard
+	var pos engine.Position
+	var gotMoves, wantMoves []engine.Move
+	var color uint8
+
+	var pieces = [2][6]engine.Bitboard{
+		{
+			engine.Bitboard(0x0000008000086200),
+			engine.Bitboard(0x0000000020400000),
+			engine.Bitboard(0),
+			engine.Bitboard(0),
+			engine.Bitboard(0),
+			engine.Bitboard(0),
+		},
+		{
+			engine.Bitboard(0x0001400014000000),
+			engine.Bitboard(0),
+			engine.Bitboard(0),
+			engine.Bitboard(0),
+			engine.Bitboard(0),
+			engine.Bitboard(0),
+		},
+	}
+	pos = engine.Position{
+		Turn:            color,
+		Pieces:          pieces,
+		CastlingRights:  0,
+		Rule50:          0,
+		EnPassantSquare: engine.NoSquare,
+	}
+	blockers = pos.Blockers()
+
+	pos.Turn = engine.White
+	gotMoves = engine.GetPawnMoves(pos, blockers)
+	wantMoves = []engine.Move{
+		engine.NewMoveFromStr("b2b3"),
+		engine.NewMoveFromStr("b2b4"),
+		engine.NewMoveFromStr("d3c4"),
+		engine.NewMoveFromStr("d3d4"),
+		engine.NewMoveFromStr("d3e4"),
+		engine.NewMoveFromStr("f2f3"),
+		engine.NewMoveFromStr("f2g3"),
+		engine.NewMoveFromStr("h5g6"),
+		engine.NewMoveFromStr("h5h6"),
+	}
+	if !equalSets(gotMoves, wantMoves) {
+		t.Errorf(`TestPawnMoves(%d)`, square)
+		fmt.Println("Got:")
+		for _, move := range gotMoves {
+			fmt.Printf("%s\n", move.ToString())
+		}
+		fmt.Println("\nWant:")
+		for _, move := range wantMoves {
+			fmt.Printf("%s\n", move.ToString())
+		}
+	}
+
+	pos.Turn = engine.Black
+	gotMoves = engine.GetPawnMoves(pos, blockers)
+	wantMoves = []engine.Move{
+		engine.NewMoveFromStr("a7a6"),
+		engine.NewMoveFromStr("a7a5"),
+		engine.NewMoveFromStr("c4c3"),
+		engine.NewMoveFromStr("c4d3"),
+		engine.NewMoveFromStr("e4d3"),
+		engine.NewMoveFromStr("e4e3"),
+		engine.NewMoveFromStr("g6g5"),
+		engine.NewMoveFromStr("g6h5"),
+	}
+	if !equalSets(gotMoves, wantMoves) {
+		t.Errorf(`TestPawnMoves(%d)`, pos.Turn)
+		fmt.Println("Got:")
+		for _, move := range gotMoves {
+			fmt.Printf("%s\n", move.ToString())
+		}
+		fmt.Println("\nWant:")
+		for _, move := range wantMoves {
+			fmt.Printf("%s\n", move.ToString())
+		}
+	}
+}
+
 func init() {
 	engine.InitBitboard()
 }

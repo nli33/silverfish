@@ -3,7 +3,6 @@ package test
 import (
 	"fmt"
 	"silverfish/engine"
-	"sort"
 	"testing"
 )
 
@@ -33,26 +32,23 @@ func TestSliderBlockerMask(t *testing.T) {
 	}
 }
 
-func equalSets(a, b []engine.Bitboard) bool {
+func equalSets[T comparable](a, b []T) bool {
 	if len(a) != len(b) {
 		return false
 	}
 
-	aCopy := append([]engine.Bitboard{}, a...)
-	bCopy := append([]engine.Bitboard{}, b...)
+	counts := make(map[T]int, len(a))
+	for _, v := range a {
+		counts[v]++
+	}
 
-	sort.Slice(aCopy, func(i, j int) bool {
-		return aCopy[i] < aCopy[j]
-	})
-	sort.Slice(bCopy, func(i, j int) bool {
-		return bCopy[i] < bCopy[j]
-	})
-
-	for i := range aCopy {
-		if aCopy[i] != bCopy[i] {
+	for _, v := range b {
+		if counts[v] == 0 {
 			return false
 		}
+		counts[v]--
 	}
+
 	return true
 }
 

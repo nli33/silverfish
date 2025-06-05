@@ -1,17 +1,16 @@
 package engine
 
-func GenPieceMoves(pos Position) []Move {
+func GenMoves(pos Position) []Move {
 	var moveList []Move
 
-	us := pos.Turn       // our color
-	them := pos.Turn ^ 1 // opponent color
-	blockers := Merge(pos.Pieces[them][:])
+	us := pos.Turn // our color
+	blockers := pos.Blockers()
 
 	for piece := Pawn; piece <= King; piece++ {
 		pieceBB := pos.Pieces[us][piece]
 		for pieceBB != 0 {
 			from := PopLsb(&pieceBB)
-			movesBB := GetMoves(piece, from, blockers, us)
+			movesBB := GetPieceMoves(piece, from, blockers, us)
 			for movesBB != 0 {
 				to := PopLsb(&movesBB)
 				moveList = append(moveList, NewMove(from, to))
@@ -19,14 +18,65 @@ func GenPieceMoves(pos Position) []Move {
 		}
 	}
 
+	moveList = append(moveList, GetPawnMoves(pos, blockers)...)
+
 	return moveList
 }
 
-func GetMoves(piece uint8, square Square, blockers Bitboard, color uint8) Bitboard {
+func GetPawnMoves(pos Position, blockers Bitboard) []Move {
+	var moveList []Move
+
+	us := pos.Turn
+	// them := pos.Turn ^ 1
+	ourPawnsBB := pos.Pieces[us][0]
+	var nextRank int
+	var captureSq Square
+	if us == White {
+		nextRank = 8
+	} else {
+		nextRank = -8
+	}
+
+	for ourPawnsBB != 0 {
+		pawnSq := PopLsb(&ourPawnsBB)
+		rank := RankOf(pawnSq)
+		file := FileOf(pawnSq)
+
+		// captures
+		if file != FileH {
+			captureSq = Square(int(pawnSq) + nextRank + 1)
+			if blockers&(1<<captureSq) != 0 {
+				moveList = append(moveList, NewMove(pawnSq, captureSq))
+			}
+		}
+		if file != FileA {
+			captureSq = Square(int(pawnSq) + nextRank - 1)
+			if blockers&(1<<captureSq) != 0 {
+				moveList = append(moveList, NewMove(pawnSq, captureSq))
+			}
+		}
+
+		// moving forward
+		nextSq := int(pawnSq) + nextRank
+		if blockers&(1<<nextSq) != 0 {
+			continue
+		}
+		moveList = append(moveList, NewMove(pawnSq, Square(nextSq)))
+
+		if rank == Rank2 && us == White || rank == Rank7 && us == Black {
+			nextSq += nextRank
+			if blockers&(1<<nextSq) != 0 {
+				continue
+			}
+			moveList = append(moveList, NewMove(pawnSq, Square(nextSq)))
+		}
+	}
+
+	return moveList
+}
+
+func GetPieceMoves(piece uint8, square Square, blockers Bitboard, color uint8) Bitboard {
 	switch piece {
-	case Pawn:
-		// TODO: pawn move generation
-		return GetPawnMoves(square, color)
 	case Knight:
 		return GetKnightMoves(square)
 	case Bishop:
@@ -59,47 +109,4 @@ func GetKnightMoves(square Square) Bitboard {
 
 func GetKingMoves(square Square) Bitboard {
 	return KingMoves[square]
-}
-
-func GetPawnMoves(square Square, color uint8) Bitboard {
-	bb := BB_Empty
-
-	switch color {
-	case White:
-		if RankOf(square) == Rank2 {
-			rank := Rank3
-			file := FileOf(square)
-			dest := rank*8 + file
-			bb |= 1 << dest
-
-			rank += 1
-			dest = rank*8 + file
-			bb |= 1 << dest
-		} else {
-			rank := RankOf(square) + 1
-			file := FileOf(square)
-
-			dest := rank*8 + file
-			bb |= 1 << dest
-		}
-	case Black:
-		if RankOf(square) == Rank7 {
-			rank := Rank6
-			file := FileOf(square)
-			dest := rank*8 + file
-			bb |= 1 << dest
-
-			rank -= 1
-			dest = rank*8 + file
-			bb |= 1 << dest
-		} else {
-			rank := RankOf(square) - 1
-			file := FileOf(square)
-
-			dest := rank*8 + file
-			bb |= 1 << dest
-		}
-	}
-
-	return bb
 }
