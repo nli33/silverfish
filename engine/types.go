@@ -213,8 +213,33 @@ func IsValid(square Square) bool {
 func Abs(x int) int {
 	if x < 0 {
 		return -x
+	} else {
+		return x
 	}
-	return x
+}
+
+func PawnDisplacement(color uint8) int {
+	if color == White {
+		return 8
+	} else {
+		return -8
+	}
+}
+
+func PawnStartingRank(color uint8) uint8 {
+	if color == White {
+		return Rank2
+	} else {
+		return Rank7
+	}
+}
+
+func PawnPromotionRank(color uint8) uint8 {
+	if color == White {
+		return Rank7
+	} else {
+		return Rank2
+	}
 }
 
 func Distance(x Square, y Square) int {

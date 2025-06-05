@@ -27,16 +27,12 @@ func GetPawnMoves(pos Position, blockers Bitboard) []Move {
 	var moveList []Move
 
 	us := pos.Turn
-	// them := pos.Turn ^ 1
 	ourPawnsBB := pos.Pieces[us][0]
-	var nextRank int
-	var captureSq Square
-	if us == White {
-		nextRank = 8
-	} else {
-		nextRank = -8
-	}
 
+	nextRank := PawnDisplacement(us)
+	pawnStartingRank := PawnStartingRank(us)
+
+	var captureSq Square
 	for ourPawnsBB != 0 {
 		pawnSq := PopLsb(&ourPawnsBB)
 		rank := RankOf(pawnSq)
@@ -63,7 +59,7 @@ func GetPawnMoves(pos Position, blockers Bitboard) []Move {
 		}
 		moveList = append(moveList, NewMove(pawnSq, Square(nextSq)))
 
-		if rank == Rank2 && us == White || rank == Rank7 && us == Black {
+		if rank == pawnStartingRank {
 			nextSq += nextRank
 			if blockers&(1<<nextSq) != 0 {
 				continue
