@@ -42,7 +42,7 @@ func (pos *Position) GetSquare(square Square) (uint8, uint8) {
 	return NoColor, NoPiece
 }
 
-func (pos *Position) IsLegal(move Move) bool {
+/* func (pos *Position) IsLegal(move Move) bool {
 	var fromColor, fromPiece = pos.GetSquare(move.From())
 	var toColor, toPiece = pos.GetSquare(move.To())
 
@@ -58,13 +58,8 @@ func (pos *Position) IsLegal(move Move) bool {
 	toPiece = toPiece
 
 	return false
-}
+} */
 
-/*
-func (pos *Position) GenMoves() (moves []Move) {
-	for piece := Knight; piece <= King; piece++ {
-		var a = uint8(piece).pop
-	}
-	return
+func (pos *Position) Blockers() Bitboard {
+	return Merge(append(pos.Pieces[0][:], pos.Pieces[1][:]...))
 }
-*/
