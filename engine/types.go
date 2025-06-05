@@ -120,6 +120,24 @@ const (
 	NoPiece
 )
 
+var CharToPiece = map[byte]uint8{
+	'k': King,
+	'q': Queen,
+	'r': Rook,
+	'b': Bishop,
+	'n': Knight,
+	'_': NoPiece,
+}
+
+var PieceToChar = map[uint8]byte{
+	King:    'k',
+	Queen:   'q',
+	Rook:    'r',
+	Bishop:  'b',
+	Knight:  'n',
+	NoPiece: '_',
+}
+
 const (
 	North     = 8
 	South     = -8
@@ -182,6 +200,12 @@ func NewSquare(rank uint8, file uint8) Square {
 	return Square(rank<<3 + file)
 }
 
+func NewSquareFromStr(squareStr string) Square {
+	file := uint8(squareStr[0] - 'a')
+	rank := uint8(squareStr[1] - '1')
+	return NewSquare(rank, file)
+}
+
 func IsValid(square Square) bool {
 	return SquareA1 <= square && square <= SquareH8
 }
@@ -200,11 +224,11 @@ func Distance(x Square, y Square) int {
 	)
 }
 
-func (bb *Bitboard) ToString() string {
+func (bb Bitboard) ToString() string {
 	var bbString string
 	for i := 7; i >= 0; i-- {
 		for j := 0; j <= 7; j++ {
-			if *bb&(1<<(i*8+j)) == 0 {
+			if bb&(1<<(i*8+j)) == 0 {
 				bbString += "0 "
 			} else {
 				bbString += "1 "
@@ -215,6 +239,13 @@ func (bb *Bitboard) ToString() string {
 	return bbString
 }
 
-func (bb *Bitboard) ToStringSmall() string {
-	return fmt.Sprintf("%064b", uint64(*bb))
+func (bb Bitboard) ToStringSmall() string {
+	return fmt.Sprintf("%064b", uint64(bb))
+}
+
+func (sq Square) ToString() string {
+	fileStr := FileOf(sq) + 'a'
+	rankStr := RankOf(sq) + '1'
+	slice := append([]byte{fileStr}, rankStr)
+	return string(slice)
 }
