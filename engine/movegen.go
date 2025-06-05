@@ -1,5 +1,7 @@
 package engine
 
+import "fmt"
+
 func GenMoves(pos Position) []Move {
 	var moveList []Move
 
@@ -34,41 +36,56 @@ func GetPawnMoves(pos Position, blockers Bitboard) []Move {
 
 	var captureSq Square
 	for ourPawnsBB != 0 {
-		pawnSq := PopLsb(&ourPawnsBB)
-		rank := RankOf(pawnSq)
-		file := FileOf(pawnSq)
+		fromSq := PopLsb(&ourPawnsBB)
+		rank := RankOf(fromSq)
+		file := FileOf(fromSq)
+		fmt.Println(fromSq)
 
 		// captures
 		if file != FileH {
-			captureSq = Square(int(pawnSq) + nextRank + 1)
+			captureSq = Square(int(fromSq) + nextRank + 1)
 			if blockers&(1<<captureSq) != 0 {
-				moveList = append(moveList, NewMove(pawnSq, captureSq))
+				AddPawnMove(&moveList, fromSq, captureSq, us)
 			}
 		}
 		if file != FileA {
-			captureSq = Square(int(pawnSq) + nextRank - 1)
+			captureSq = Square(int(fromSq) + nextRank - 1)
 			if blockers&(1<<captureSq) != 0 {
-				moveList = append(moveList, NewMove(pawnSq, captureSq))
+				AddPawnMove(&moveList, fromSq, captureSq, us)
 			}
 		}
 
 		// moving forward
-		nextSq := int(pawnSq) + nextRank
+		nextSq := int(fromSq) + nextRank
 		if blockers&(1<<nextSq) != 0 {
 			continue
 		}
-		moveList = append(moveList, NewMove(pawnSq, Square(nextSq)))
 
+		AddPawnMove(&moveList, fromSq, Square(nextSq), us)
+
+		// moving forward 2 squares
 		if rank == pawnStartingRank {
 			nextSq += nextRank
 			if blockers&(1<<nextSq) != 0 {
 				continue
 			}
-			moveList = append(moveList, NewMove(pawnSq, Square(nextSq)))
+			moveList = append(moveList, NewMove(fromSq, Square(nextSq)))
 		}
 	}
 
 	return moveList
+}
+
+// add a pawn move to a move list
+// if a promotion is possible, add promotion moves instead
+func AddPawnMove(moveList *[]Move, fromSq Square, toSq Square, color uint8) {
+	if RankOf(fromSq) == PawnPromotionRank(color) {
+		for piece := Knight; piece <= Queen; piece++ {
+			*moveList = append(*moveList, NewMovePromotion(fromSq, toSq, piece))
+		}
+	} else {
+		*moveList = append(*moveList, NewMove(fromSq, toSq))
+	}
 }
 
 func GetPieceMoves(piece uint8, square Square, blockers Bitboard, color uint8) Bitboard {

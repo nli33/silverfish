@@ -220,11 +220,10 @@ func TestPawnMoves(t *testing.T) {
 	var blockers engine.Bitboard
 	var pos engine.Position
 	var gotMoves, wantMoves []engine.Move
-	var color uint8
 
 	var pieces = [2][6]engine.Bitboard{
 		{
-			engine.Bitboard(0x0000008000086200),
+			engine.Bitboard(0x0014008000086200),
 			engine.Bitboard(0x0000000020400000),
 			engine.Bitboard(0),
 			engine.Bitboard(0),
@@ -232,19 +231,16 @@ func TestPawnMoves(t *testing.T) {
 			engine.Bitboard(0),
 		},
 		{
-			engine.Bitboard(0x0001400014000000),
+			engine.Bitboard(0x0001400014008000),
+			engine.Bitboard(0),
+			engine.Bitboard(0x0800000000000000),
 			engine.Bitboard(0),
 			engine.Bitboard(0),
-			engine.Bitboard(0),
-			engine.Bitboard(0),
-			engine.Bitboard(0),
+			engine.Bitboard(0x1000000000000000),
 		},
 	}
 	pos = engine.Position{
-		Turn:            color,
 		Pieces:          pieces,
-		CastlingRights:  0,
-		Rule50:          0,
 		EnPassantSquare: engine.NoSquare,
 	}
 	blockers = pos.Blockers()
@@ -261,6 +257,20 @@ func TestPawnMoves(t *testing.T) {
 		engine.NewMoveFromStr("f2g3"),
 		engine.NewMoveFromStr("h5g6"),
 		engine.NewMoveFromStr("h5h6"),
+
+		engine.NewMoveFromStr("c7c8n"),
+		engine.NewMoveFromStr("c7c8b"),
+		engine.NewMoveFromStr("c7c8r"),
+		engine.NewMoveFromStr("c7c8q"),
+		engine.NewMoveFromStr("c7d8n"),
+		engine.NewMoveFromStr("c7d8b"),
+		engine.NewMoveFromStr("c7d8r"),
+		engine.NewMoveFromStr("c7d8q"),
+
+		engine.NewMoveFromStr("e7d8n"),
+		engine.NewMoveFromStr("e7d8b"),
+		engine.NewMoveFromStr("e7d8r"),
+		engine.NewMoveFromStr("e7d8q"),
 	}
 	if !equalSets(gotMoves, wantMoves) {
 		t.Errorf(`TestPawnMoves(%d)`, square)
@@ -285,6 +295,11 @@ func TestPawnMoves(t *testing.T) {
 		engine.NewMoveFromStr("e4e3"),
 		engine.NewMoveFromStr("g6g5"),
 		engine.NewMoveFromStr("g6h5"),
+
+		engine.NewMoveFromStr("h2h1n"),
+		engine.NewMoveFromStr("h2h1b"),
+		engine.NewMoveFromStr("h2h1r"),
+		engine.NewMoveFromStr("h2h1q"),
 	}
 	if !equalSets(gotMoves, wantMoves) {
 		t.Errorf(`TestPawnMoves(%d)`, pos.Turn)
