@@ -32,7 +32,7 @@ func TestMoveStr(t *testing.T) {
 	}
 
 	gotMove = engine.NewMoveFromStr("b2b1q")
-	wantMove = engine.NewMovePromotion(engine.SquareB2, engine.SquareB1, engine.Queen)
+	wantMove = engine.NewPromotionMove(engine.SquareB2, engine.SquareB1, engine.Queen)
 	if gotMove != wantMove {
 		t.Errorf("NewMoveFromStr(b2b1q)")
 		fmt.Printf("Got: %016b\n", gotMove)

@@ -1,7 +1,5 @@
 package engine
 
-import "fmt"
-
 func GenMoves(pos Position) []Move {
 	var moveList []Move
 
@@ -43,8 +41,14 @@ func GetPawnMoves(pos Position, blockers Bitboard) []Move {
 		for capturesBB != 0 {
 			toSq := PopLsb(&capturesBB)
 			if blockers&(1<<toSq) != 0 {
-				AddPawnMove(&moveList, fromSq, toSq, us)
-				fmt.Println(toSq)
+				if rank == PawnPromotionRank(us) { // promotion
+					AddPromotions(&moveList, fromSq, toSq)
+				} else { // normal capture
+					moveList = append(moveList, NewMove(fromSq, toSq))
+				}
+			} else if pos.EnPassantSquare == toSq && blockers&(1<<pos.EnPassantSquare) == 0 {
+				// en passant
+				moveList = append(moveList, NewMove(fromSq, pos.EnPassantSquare)|EnPassantFlag)
 			}
 		}
 
@@ -53,8 +57,11 @@ func GetPawnMoves(pos Position, blockers Bitboard) []Move {
 		if blockers&(1<<nextSq) != 0 {
 			continue
 		}
-
-		AddPawnMove(&moveList, fromSq, Square(nextSq), us)
+		if rank == PawnPromotionRank(us) { // promotion
+			AddPromotions(&moveList, fromSq, Square(nextSq))
+		} else { // normal move 1 square forward
+			moveList = append(moveList, NewMove(fromSq, Square(nextSq)))
+		}
 
 		// moving forward 2 squares
 		if rank == pawnStartingRank {
@@ -71,13 +78,10 @@ func GetPawnMoves(pos Position, blockers Bitboard) []Move {
 
 // add a pawn move to a move list
 // if a promotion is possible, add promotion moves instead
-func AddPawnMove(moveList *[]Move, fromSq Square, toSq Square, color uint8) {
-	if RankOf(toSq) == PawnPromotionRank(color) {
-		for piece := Knight; piece <= Queen; piece++ {
-			*moveList = append(*moveList, NewMovePromotion(fromSq, toSq, piece))
-		}
-	} else {
-		*moveList = append(*moveList, NewMove(fromSq, toSq))
+func AddPromotions(moveList *[]Move, fromSq Square, toSq Square) {
+	//if RankOf(toSq) == PawnPromotionRank(color) {
+	for piece := Knight; piece <= Queen; piece++ {
+		*moveList = append(*moveList, NewPromotionMove(fromSq, toSq, piece))
 	}
 }
 

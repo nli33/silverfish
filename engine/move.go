@@ -8,12 +8,19 @@ package engine
 */
 type Move uint16
 
+const (
+	NoneFlag = iota << 14
+	CastlingFlag
+	EnPassantFlag
+	PromotionFlag
+)
+
 func NewMove(from Square, to Square) Move {
 	return Move(uint16(from) | uint16(to)<<6)
 }
 
-func NewMovePromotion(from Square, to Square, promotion uint8) Move {
-	return Move(uint16(from) | uint16(to)<<6 | uint16(promotion-1)<<12 | 0b11<<14)
+func NewPromotionMove(from Square, to Square, promotion uint8) Move {
+	return Move(uint16(from) | uint16(to)<<6 | uint16(promotion-1)<<12 | PromotionFlag)
 }
 
 func NewMoveCastle(side uint8) Move {
@@ -35,7 +42,7 @@ func NewMoveFromStr(moveStr string) Move {
 
 	if len(moveStr) == 5 {
 		promotion := CharToPiece[moveStr[4]]
-		return NewMovePromotion(from, to, promotion)
+		return NewPromotionMove(from, to, promotion)
 	} else {
 		return NewMove(from, to)
 	}
@@ -54,19 +61,19 @@ func (m Move) Promotion() uint8 {
 }
 
 func (m Move) IsPromotion() bool {
-	return m>>14&0b11 == 0b11
+	return m&PromotionFlag == PromotionFlag
 }
 
 func (m Move) IsCastling() bool {
-	return m>>14&0b11 == 0b01
+	return m&CastlingFlag == CastlingFlag
 }
 
 func (m Move) IsEnPassant() bool {
-	return m>>14&0b11 == 0b10
+	return m&EnPassantFlag == EnPassantFlag
 }
 
 func (m Move) Type() uint8 {
-	return uint8(m >> 14)
+	return uint8(m & PromotionFlag)
 }
 
 func (m Move) ToString() string {

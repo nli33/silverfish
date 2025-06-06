@@ -216,7 +216,6 @@ func TestKingMoves(t *testing.T) {
 }
 
 func TestPawnMoves(t *testing.T) {
-	var square engine.Square
 	var blockers engine.Bitboard
 	var pos engine.Position
 	var gotMoves, wantMoves []engine.Move
@@ -273,15 +272,16 @@ func TestPawnMoves(t *testing.T) {
 		engine.NewMoveFromStr("e7d8q"),
 	}
 	if !equalSets(gotMoves, wantMoves) {
-		t.Errorf(`TestPawnMoves(%d)`, square)
+		t.Errorf(`TestPawnMoves(%d)`, pos.Turn)
 		fmt.Println("Got:")
 		for _, move := range gotMoves {
 			fmt.Printf("%s\n", move.ToString())
 		}
-		fmt.Println("\nWant:")
+		fmt.Println("Want:")
 		for _, move := range wantMoves {
 			fmt.Printf("%s\n", move.ToString())
 		}
+		fmt.Println()
 	}
 
 	pos.Turn = engine.Black
@@ -307,10 +307,82 @@ func TestPawnMoves(t *testing.T) {
 		for _, move := range gotMoves {
 			fmt.Printf("%s\n", move.ToString())
 		}
-		fmt.Println("\nWant:")
+		fmt.Println("Want:")
 		for _, move := range wantMoves {
 			fmt.Printf("%s\n", move.ToString())
 		}
+		fmt.Println()
+	}
+}
+
+func TestEnPassant(t *testing.T) {
+	var blockers engine.Bitboard
+	var pos engine.Position
+	var gotMoves, wantMoves []engine.Move
+
+	var pieces = [2][6]engine.Bitboard{
+		{
+			engine.Bitboard(0x0000008002000000),
+			engine.Bitboard(0),
+			engine.Bitboard(0),
+			engine.Bitboard(0),
+			engine.Bitboard(0),
+			engine.Bitboard(0),
+		},
+		{
+			engine.Bitboard(0x0000004004000000),
+			engine.Bitboard(0),
+			engine.Bitboard(0),
+			engine.Bitboard(0),
+			engine.Bitboard(0),
+			engine.Bitboard(0),
+		},
+	}
+	pos = engine.Position{
+		Pieces: pieces,
+	}
+	blockers = pos.Blockers()
+
+	pos.Turn = engine.Black
+	pos.EnPassantSquare = engine.SquareB3
+	gotMoves = engine.GetPawnMoves(pos, blockers)
+	wantMoves = []engine.Move{
+		engine.NewMoveFromStr("c4b3") | engine.EnPassantFlag,
+		engine.NewMoveFromStr("c4c3"),
+		engine.NewMoveFromStr("g5g4"),
+	}
+	if !equalSets(gotMoves, wantMoves) {
+		t.Errorf(`TestPawnMoves(%d)`, pos.Turn)
+		fmt.Println("Got:")
+		for _, move := range gotMoves {
+			fmt.Printf("%s\n", move.ToString())
+		}
+		fmt.Println("Want:")
+		for _, move := range wantMoves {
+			fmt.Printf("%s\n", move.ToString())
+		}
+		fmt.Println()
+	}
+
+	pos.Turn = engine.White
+	pos.EnPassantSquare = engine.SquareG6
+	gotMoves = engine.GetPawnMoves(pos, blockers)
+	wantMoves = []engine.Move{
+		engine.NewMoveFromStr("b4b5"),
+		engine.NewMoveFromStr("h5h6"),
+		engine.NewMoveFromStr("h5g6") | engine.EnPassantFlag,
+	}
+	if !equalSets(gotMoves, wantMoves) {
+		t.Errorf(`TestPawnMoves(%d)`, pos.Turn)
+		fmt.Println("Got:")
+		for _, move := range gotMoves {
+			fmt.Printf("%s\n", move.ToString())
+		}
+		fmt.Println("Want:")
+		for _, move := range wantMoves {
+			fmt.Printf("%s\n", move.ToString())
+		}
+		fmt.Println()
 	}
 }
 
