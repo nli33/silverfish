@@ -7,7 +7,11 @@ type Position struct {
 	Pieces          [2][6]Bitboard
 	// Castling Rights:
 	// (0-1) boolean - does white have castling rights?
+	// 0 - can white castle kingside?
+	// 1 - can white castle queenside?
 	// (2-3) boolean - does black have castling rights?
+	// 0 - can black castle kingside?
+	// 1 - can black castle queenside?
 	CastlingRights  uint8
 	Rule50          uint8
 	EnPassantSquare Square
