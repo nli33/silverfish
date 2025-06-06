@@ -3,9 +3,6 @@
 package engine
 
 type Position struct {
-	// 0 - white
-	// 1 - black
-	// To Neng: please correct this comment if it's wrong.
 	Turn            uint8
 	Pieces          [2][6]Bitboard
 	// Castling Rights:
