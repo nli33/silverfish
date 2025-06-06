@@ -236,9 +236,9 @@ func PawnStartingRank(color uint8) uint8 {
 
 func PawnPromotionRank(color uint8) uint8 {
 	if color == White {
-		return Rank7
+		return Rank8
 	} else {
-		return Rank2
+		return Rank1
 	}
 }
 

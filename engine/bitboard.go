@@ -20,6 +20,7 @@ var RookMoves [64][]Bitboard
 var BishopMoves [64][]Bitboard
 var KnightMoves [64]Bitboard
 var KingMoves [64]Bitboard
+var PawnCaptures [2][64]Bitboard
 
 func MagicIndex(entry MagicEntry, blockers Bitboard) uint64 {
 	return (uint64(blockers&entry.Mask) * entry.Magic) >> (64 - entry.IndexBits)
@@ -170,6 +171,20 @@ func initKnightMoves(square Square) Bitboard {
 	return bb
 }
 
+func initPawnCaptures(from Square, color uint8) Bitboard {
+	bb := BB_Empty
+	nextRank := PawnDisplacement(color)
+	to1 := Square(int(from) + nextRank + 1)
+	to2 := Square(int(from) + nextRank - 1)
+	if Distance(from, to1) == 1 {
+		bb |= 1 << to1
+	}
+	if Distance(from, to2) == 1 {
+		bb |= 1 << to2
+	}
+	return bb
+}
+
 func Lsb(bb Bitboard) Square {
 	return Square(bits.TrailingZeros(uint(bb)))
 }
@@ -200,5 +215,9 @@ func InitBitboard() {
 		KnightMoves[sq] = initKnightMoves(sq)
 
 		KingMoves[sq] = initKingMoves(sq)
+
+		for color := White; color <= Black; color++ {
+			PawnCaptures[color][sq] = initPawnCaptures(sq, color)
+		}
 	}
 }

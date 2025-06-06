@@ -34,24 +34,17 @@ func GetPawnMoves(pos Position, blockers Bitboard) []Move {
 	nextRank := PawnDisplacement(us)
 	pawnStartingRank := PawnStartingRank(us)
 
-	var captureSq Square
 	for ourPawnsBB != 0 {
 		fromSq := PopLsb(&ourPawnsBB)
 		rank := RankOf(fromSq)
-		file := FileOf(fromSq)
-		fmt.Println(fromSq)
 
-		// captures
-		if file != FileH {
-			captureSq = Square(int(fromSq) + nextRank + 1)
-			if blockers&(1<<captureSq) != 0 {
-				AddPawnMove(&moveList, fromSq, captureSq, us)
-			}
-		}
-		if file != FileA {
-			captureSq = Square(int(fromSq) + nextRank - 1)
-			if blockers&(1<<captureSq) != 0 {
-				AddPawnMove(&moveList, fromSq, captureSq, us)
+		// captures + en passant
+		capturesBB := PawnCaptures[us][fromSq]
+		for capturesBB != 0 {
+			toSq := PopLsb(&capturesBB)
+			if blockers&(1<<toSq) != 0 {
+				AddPawnMove(&moveList, fromSq, toSq, us)
+				fmt.Println(toSq)
 			}
 		}
 
@@ -79,7 +72,7 @@ func GetPawnMoves(pos Position, blockers Bitboard) []Move {
 // add a pawn move to a move list
 // if a promotion is possible, add promotion moves instead
 func AddPawnMove(moveList *[]Move, fromSq Square, toSq Square, color uint8) {
-	if RankOf(fromSq) == PawnPromotionRank(color) {
+	if RankOf(toSq) == PawnPromotionRank(color) {
 		for piece := Knight; piece <= Queen; piece++ {
 			*moveList = append(*moveList, NewMovePromotion(fromSq, toSq, piece))
 		}

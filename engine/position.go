@@ -25,9 +25,9 @@ func StartingPosition() *Position {
 	return &p
 }
 
-func (pos *Position) DoMove(move Move) bool {
+/* func (pos *Position) DoMove(move Move) bool {
 	return true
-}
+} */
 
 func (pos *Position) GetSquare(square Square) (uint8, uint8) {
 	var color, piece uint8
