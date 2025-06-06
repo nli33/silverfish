@@ -91,8 +91,6 @@ func GetPieceMoves(piece uint8, square Square, blockers Bitboard, color uint8) B
 		return GetRookMoves(square, blockers)
 	case Queen:
 		return GetBishopMoves(square, blockers) | GetRookMoves(square, blockers)
-	case King:
-		return GetKingMoves(square)
 	}
 	return Bitboard(0)
 }
@@ -113,6 +111,24 @@ func GetKnightMoves(square Square) Bitboard {
 	return KnightMoves[square]
 }
 
-func GetKingMoves(square Square) Bitboard {
-	return KingMoves[square]
+func GetKingMoves(pos Position, square Square) []Move {
+	movesBB := KingMoves[square]
+	moves := make([]Move, 0)
+
+	for movesBB != 0 {
+		destSquare := PopLsb(&movesBB);
+		moves = append(moves, NewMove(square, destSquare))
+	}
+
+	if pos.Turn == White && pos.CanWhiteCastle() {
+		moves = append(moves, NewMoveCastle(WhiteKingside))
+		moves = append(moves, NewMoveCastle(WhiteQueenside))
+	}
+
+	if pos.Turn == Black && pos.CanBlackCastle() {
+		moves = append(moves, NewMoveCastle(BlackKingside))
+		moves = append(moves, NewMoveCastle(BlackQueenside))
+	}
+
+	return moves
 }

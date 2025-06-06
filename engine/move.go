@@ -16,6 +16,11 @@ func NewMovePromotion(from Square, to Square, promotion uint8) Move {
 	return Move(uint16(from) | uint16(to)<<6 | uint16(promotion-1)<<12 | 0b11<<14)
 }
 
+func NewMoveCastle(side uint8) Move {
+	// TODO
+	return Move(0)
+}
+
 // ex: c2c1q
 // ex: b2b4
 func NewMoveFromStr(moveStr string) Move {
