@@ -120,15 +120,22 @@ func GetKingMoves(pos Position, square Square) []Move {
 		moves = append(moves, NewMove(square, destSquare))
 	}
 
-	if pos.Turn == White && pos.CanWhiteCastle() {
+	if pos.Turn == White && pos.CanWhiteCastleKingside() {
 		moves = append(moves, NewMoveCastle(WhiteKingside))
+	}
+
+	if pos.Turn == Black && pos.CanBlackCastleKingside() {
+		moves = append(moves, NewMoveCastle(BlackKingside))
+	}
+
+	if pos.Turn == White && pos.CanWhiteCastleQueenside() {
 		moves = append(moves, NewMoveCastle(WhiteQueenside))
 	}
 
-	if pos.Turn == Black && pos.CanBlackCastle() {
-		moves = append(moves, NewMoveCastle(BlackKingside))
+	if pos.Turn == Black && pos.CanBlackCastleQueenside() {
 		moves = append(moves, NewMoveCastle(BlackQueenside))
 	}
+
 
 	return moves
 }

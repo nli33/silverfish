@@ -49,12 +49,20 @@ func (pos *Position) GetSquare(square Square) (uint8, uint8) {
 	return NoColor, NoPiece
 }
 
-func (pos *Position) CanWhiteCastle() bool {
-	return pos.CastlingRights & 0b00000011 != 0
+func (pos *Position) CanWhiteCastleKingside() bool {
+	return pos.CastlingRights & 0b00000001 != 0
 }
 
-func (pos *Position) CanBlackCastle() bool {
-	return pos.CastlingRights & 0b00001100 != 0
+func (pos *Position) CanWhiteCastleQueenside() bool {
+	return pos.CastlingRights & 0b00000010 != 0
+}
+
+func (pos *Position) CanBlackCastleKingside() bool {
+	return pos.CastlingRights & 0b00000100 != 0
+}
+
+func (pos *Position) CanBlackCastleQueenside() bool {
+	return pos.CastlingRights & 0b00001000 != 0
 }
 
 /* func (pos *Position) IsLegal(move Move) bool {
