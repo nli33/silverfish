@@ -3,8 +3,14 @@
 package engine
 
 type Position struct {
+	// 0 - white
+	// 1 - black
+	// To Neng: please correct this comment if it's wrong.
 	Turn            uint8
 	Pieces          [2][6]Bitboard
+	// Castling Rights:
+	// (0-1) boolean - does white have castling rights?
+	// (2-3) boolean - does black have castling rights?
 	CastlingRights  uint8
 	Rule50          uint8
 	EnPassantSquare Square
@@ -40,6 +46,14 @@ func (pos *Position) GetSquare(square Square) (uint8, uint8) {
 		}
 	}
 	return NoColor, NoPiece
+}
+
+func (pos *Position) CanWhiteCastle() bool {
+	return pos.CastlingRights & 0b00000011 != 0
+}
+
+func (pos *Position) CanBlackCastle() bool {
+	return pos.CastlingRights & 0b00001100 != 0
 }
 
 /* func (pos *Position) IsLegal(move Move) bool {
