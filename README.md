@@ -1,6 +1,7 @@
 = Silverfish
-image:https://github.com/carpetmaker3162/silverfish/actions/workflows/go.yml/badge.svg[Build and Test, link="https://github.com/carpetmaker3162/silverfish/actions/workflows/go.yml"]
-image::logo.svg[]
+[![Build and Test](https://github.com/carpetmaker3162/silverfish/actions/workflows/go.yml/badge.svg)](https://github.com/carpetmaker3162/silverfish/actions/workflows/go.yml)
+
+![Logo](https://raw.githubusercontent.com/carpetmaker3162/silverfish/refs/heads/master/logo.svg)
 
 Chess Engine (work-in-progress). Maybe one day we'll be able to compete with Stockfish, but who knows?
 
