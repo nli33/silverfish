@@ -51,6 +51,20 @@ func NewMoveFromStr(moveStr string) Move {
 	}
 }
 
+func GetMovesFromBitboard(origin Square, bitboard Bitboard) []Move {
+	moves := make([]Move, 0)
+	// Not sure if this is necessary, but doing it just in case.
+	bb := bitboard
+
+	for bb != 0 {
+		dest := PopLsb(&bb)
+		move := NewMove(origin, dest)
+		moves = append(moves, move)
+	}
+
+	return moves
+}
+
 func (m Move) From() Square {
 	return Square(m & 0b111111)
 }
