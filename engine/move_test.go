@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func GetMovesFromBitboardTest(t *testing.T) {
+func TestGetMovesFromBitboard(t *testing.T) {
 	gotMoves := engine.GetMovesFromBitboard(engine.SquareA1, 0x000000000101010e)
 	expectedMoves := []engine.Move{
 		engine.NewMove(engine.SquareA1, engine.SquareA2),
