@@ -4,6 +4,8 @@ from tkinter import ttk
 GRID_SIZE = 8
 CELL_SIZE = 64
 BOARD_SIZE = GRID_SIZE * CELL_SIZE
+MARGIN = 30 # Space for labels
+CANVAS_SIZE = BOARD_SIZE + 2 * MARGIN
 FONT = ("Consolas", 12)
 
 class BitboardVisualizer(tk.Tk):
@@ -12,8 +14,8 @@ class BitboardVisualizer(tk.Tk):
         self.title("Chess Bitboard Visualizer")
         self.bitboard = 0
 
-        # Canvas for board visualization
-        self.canvas = tk.Canvas(self, width=BOARD_SIZE, height=BOARD_SIZE, bg="#aaa")
+        # Canvas for board visualization with margins for labels
+        self.canvas = tk.Canvas(self, width=CANVAS_SIZE, height=CANVAS_SIZE, bg="#aaa")
         self.canvas.grid(row=0, column=0, columnspan=3)
         self.canvas.bind("<Button-1>", self.on_click)
 
@@ -39,9 +41,11 @@ class BitboardVisualizer(tk.Tk):
 
     def draw_board(self):
         self.canvas.delete("all")
+
+        # Draw squares
         for r in range(GRID_SIZE):
             for c in range(GRID_SIZE):
-                x0, y0 = c*CELL_SIZE, r*CELL_SIZE
+                x0, y0 = c*CELL_SIZE + MARGIN, r*CELL_SIZE + MARGIN
                 x1, y1 = x0+CELL_SIZE, y0+CELL_SIZE
                 color = "#eee" if (r+c)%2==0 else "#555"
                 self.canvas.create_rectangle(x0, y0, x1, y1, fill=color, outline="")
@@ -49,19 +53,37 @@ class BitboardVisualizer(tk.Tk):
                 if (self.bitboard >> index) & 1:
                     self.canvas.create_rectangle(x0+4, y0+4, x1-4, y1-4, fill="#3498db", outline="")
 
+        # Draw column labels (A-H)
+        for c in range(GRID_SIZE):
+            x = c*CELL_SIZE + CELL_SIZE//2 + MARGIN
+            y = MARGIN // 2
+            self.canvas.create_text(x, y, text=chr(ord('A') + c), font=FONT, fill="black")
+
+        # Draw row labels (8-1)
+        for r in range(GRID_SIZE):
+            x = MARGIN // 2
+            y = r*CELL_SIZE + CELL_SIZE//2 + MARGIN
+            self.canvas.create_text(x, y, text=str(8 - r), font=FONT, fill="black")
+
+
     def format_binary(self, value: int) -> str:
         bits = format(value, '064b')
         groups = [bits[i:i+8] for i in range(0, 64, 8)]
         return '0b' + '_'.join(groups)
 
     def on_click(self, event):
-        c = event.x // CELL_SIZE
-        r = event.y // CELL_SIZE
+        # Adjust coordinates for margin
+        clicked_x = event.x - MARGIN
+        clicked_y = event.y - MARGIN
+
+        c = clicked_x // CELL_SIZE
+        r = clicked_y // CELL_SIZE
+
         if 0 <= c < GRID_SIZE and 0 <= r < GRID_SIZE:
             index = (7-r)*8 + c
             self.bitboard ^= (1 << index)
-            self.draw_board()
-            self.update_entries()
+        self.draw_board()
+        self.update_entries()
 
     def update_entries(self):
         # Update entries based on current bitboard
@@ -99,4 +121,3 @@ class BitboardVisualizer(tk.Tk):
 if __name__ == '__main__':
     app = BitboardVisualizer()
     app.mainloop()
-
