@@ -7,10 +7,10 @@ build:
 	go build -o $(BIN_DIR)/$(BINARY) silverfish/cmd/$(BINARY)
 
 run:
-	go run cmd/silverfish/main.go
+	go run ./cmd/silverfish
 
 test:
-	go test silverfish/test
+	go test ./engine
 
 clean:
 	go clean
