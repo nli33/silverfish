@@ -15,7 +15,7 @@ func main() {
 		entry, _ := engine.FindMagic(engine.Rook, sq)
 		fmt.Println(toString(entry))
 	}
-	fmt.Println("}\n")
+	fmt.Print("}\n\n")
 
 	fmt.Println("var BishopMagics [64]MagicEntry = [64]MagicEntry{")
 	for sq := engine.SquareA1; sq <= engine.SquareH8; sq++ {
