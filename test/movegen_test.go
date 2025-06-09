@@ -7,16 +7,11 @@ import (
 )
 
 func TestSliderAttacks(t *testing.T) {
-	var piece uint8
-	var square engine.Square
-	var blockers engine.Bitboard
-	var gotBB, wantBB engine.Bitboard
-
-	piece = engine.Rook
-	square = engine.SquareD1
-	blockers = engine.Bitboard(0x800000000200444)
-	gotBB = engine.SliderAttacks(piece, square, blockers)
-	wantBB = engine.Bitboard(0x808080808080874)
+	piece := engine.Rook
+	square := engine.SquareD1
+	blockers := engine.Bitboard(0x800000000200444)
+	gotBB := engine.SliderAttacks(piece, square, blockers)
+	wantBB := engine.Bitboard(0x808080808080874)
 	if gotBB != wantBB {
 		t.Errorf(`SliderAttacks(%d, %d, %d)`, piece, square, blockers)
 		fmt.Printf("Got:\n%s\n", gotBB.ToString())
@@ -49,13 +44,10 @@ func TestSliderAttacks(t *testing.T) {
 }
 
 func TestMagicBitboard(t *testing.T) {
-	var square engine.Square
-	var blockers, gotBB, wantBB engine.Bitboard
-
-	square = engine.SquareD4
-	blockers = engine.BB_Empty
-	gotBB = engine.GetRookMoves(square, blockers)
-	wantBB = engine.Bitboard(0x8080808f7080808)
+	square := engine.SquareD4
+	blockers := engine.BB_Empty
+	gotBB := engine.GetRookMoves(square, blockers)
+	wantBB := engine.Bitboard(0x8080808f7080808)
 	if gotBB != wantBB {
 		t.Errorf(`MagicBitboard(%d, %d)`, square, blockers)
 		fmt.Printf("Got:\n%s\n", gotBB.ToString())
@@ -149,13 +141,10 @@ func TestMagicBitboard(t *testing.T) {
 }
 
 func TestKnightMoves(t *testing.T) {
-	var square engine.Square
-	var gotBB, wantBB engine.Bitboard
-
 	// 6 destination squares
-	square = engine.SquareB4
-	gotBB = engine.GetKnightMoves(square)
-	wantBB = engine.Bitboard(0x50800080500)
+	square := engine.SquareB4
+	gotBB := engine.GetKnightMoves(square)
+	wantBB := engine.Bitboard(0x50800080500)
 	if gotBB != wantBB {
 		t.Errorf(`TestKnightMoves(%d)`, square)
 		fmt.Printf("Got:\n%s\n", gotBB.ToString())
@@ -184,12 +173,9 @@ func TestKnightMoves(t *testing.T) {
 }
 
 func TestKingMoves(t *testing.T) {
-	var square engine.Square
-	var gotBB, wantBB engine.Bitboard
-
-	square = engine.SquareG7
-	gotBB = engine.GetKingMoves(square)
-	wantBB = engine.Bitboard(0xe0a0e00000000000)
+	square := engine.SquareG7
+	gotBB := engine.GetKingMoves(square)
+	wantBB := engine.Bitboard(0xe0a0e00000000000)
 	if gotBB != wantBB {
 		t.Errorf(`TestKingMoves(%d)`, square)
 		fmt.Printf("Got:\n%s\n", gotBB.ToString())
@@ -216,11 +202,7 @@ func TestKingMoves(t *testing.T) {
 }
 
 func TestPawnMoves(t *testing.T) {
-	var blockers engine.Bitboard
-	var pos engine.Position
-	var gotMoves, wantMoves []engine.Move
-
-	var pieces = [2][6]engine.Bitboard{
+	pieces := [2][6]engine.Bitboard{
 		{
 			engine.Bitboard(0x0014008000086200),
 			engine.Bitboard(0x0000000020400000),
@@ -238,15 +220,15 @@ func TestPawnMoves(t *testing.T) {
 			engine.Bitboard(0x1000000000000000),
 		},
 	}
-	pos = engine.Position{
+	pos := engine.Position{
 		Pieces:          pieces,
 		EnPassantSquare: engine.NoSquare,
 	}
-	blockers = pos.Blockers()
+	blockers := pos.Blockers()
 
 	pos.Turn = engine.White
-	gotMoves = engine.GetPawnMoves(pos, blockers)
-	wantMoves = []engine.Move{
+	gotMoves := engine.GetPawnMoves(pos, blockers)
+	wantMoves := []engine.Move{
 		engine.NewMoveFromStr("b2b3"),
 		engine.NewMoveFromStr("b2b4"),
 		engine.NewMoveFromStr("d3c4"),
@@ -316,11 +298,7 @@ func TestPawnMoves(t *testing.T) {
 }
 
 func TestEnPassant(t *testing.T) {
-	var blockers engine.Bitboard
-	var pos engine.Position
-	var gotMoves, wantMoves []engine.Move
-
-	var pieces = [2][6]engine.Bitboard{
+	pieces := [2][6]engine.Bitboard{
 		{
 			engine.Bitboard(0x0000008002000000),
 			engine.Bitboard(0),
@@ -338,15 +316,15 @@ func TestEnPassant(t *testing.T) {
 			engine.Bitboard(0),
 		},
 	}
-	pos = engine.Position{
+	pos := engine.Position{
 		Pieces: pieces,
 	}
-	blockers = pos.Blockers()
+	blockers := pos.Blockers()
 
 	pos.Turn = engine.Black
 	pos.EnPassantSquare = engine.SquareB3
-	gotMoves = engine.GetPawnMoves(pos, blockers)
-	wantMoves = []engine.Move{
+	gotMoves := engine.GetPawnMoves(pos, blockers)
+	wantMoves := []engine.Move{
 		engine.NewMoveFromStr("c4b3") | engine.EnPassantFlag,
 		engine.NewMoveFromStr("c4c3"),
 		engine.NewMoveFromStr("g5g4"),
@@ -384,6 +362,10 @@ func TestEnPassant(t *testing.T) {
 		}
 		fmt.Println()
 	}
+}
+
+func TestCastling(t *testing.T) {
+
 }
 
 func init() {

@@ -18,13 +18,11 @@ func TestRankFile(t *testing.T) {
 
 func TestGetSquare(t *testing.T) {
 	p := engine.StartingPosition()
-	var wantColor, wantPiece, gotColor, gotPiece uint8
-	var square engine.Square
 
-	square = engine.SquareD1
-	gotColor, gotPiece = p.GetSquare(square)
-	wantColor = engine.White
-	wantPiece = engine.Queen
+	square := engine.SquareD1
+	gotColor, gotPiece := p.GetSquare(square)
+	wantColor := engine.White
+	wantPiece := engine.Queen
 	if gotColor != wantColor || gotPiece != wantPiece {
 		t.Errorf(`p.GetSquare(%d) = (%d, %d); want (%d, %d)`, square, gotColor, gotPiece, wantColor, wantPiece)
 	}

@@ -7,14 +7,10 @@ import (
 )
 
 func TestSliderBlockerMask(t *testing.T) {
-	var piece uint8
-	var square engine.Square
-	var gotBB, wantBB engine.Bitboard
-
-	piece = engine.Bishop
-	square = engine.SquareD3
-	gotBB = engine.SliderBlockerMask(piece, square)
-	wantBB = engine.Bitboard(0b00000000_00000000_01000000_00100010_00010100_00000000_00010100_00000000)
+	piece := engine.Bishop
+	square := engine.SquareD3
+	gotBB := engine.SliderBlockerMask(piece, square)
+	wantBB := engine.Bitboard(0b00000000_00000000_01000000_00100010_00010100_00000000_00010100_00000000)
 	if gotBB != wantBB {
 		t.Errorf(`SliderBlockerMask(%d, %d)`, piece, square)
 		fmt.Printf("Got:\n%s\n", gotBB.ToString())
@@ -53,11 +49,8 @@ func equalSets[T comparable](a, b []T) bool {
 }
 
 func TestSubsets(t *testing.T) {
-	var mask engine.Bitboard
-	var wantSubsets, gotSubsets []engine.Bitboard
-
-	mask = engine.Bitboard(0b01010001)
-	wantSubsets = []engine.Bitboard{
+	mask := engine.Bitboard(0b01010001)
+	wantSubsets := []engine.Bitboard{
 		engine.Bitboard(0b00000000),
 		engine.Bitboard(0b00010001),
 		engine.Bitboard(0b01000001),
@@ -67,7 +60,7 @@ func TestSubsets(t *testing.T) {
 		engine.Bitboard(0b00000001),
 		engine.Bitboard(0b01010001),
 	}
-	gotSubsets = engine.Subsets(mask)
+	gotSubsets := engine.Subsets(mask)
 
 	if !equalSets(wantSubsets, gotSubsets) {
 		t.Errorf(`TestSubsets(%s)`, mask.ToStringSmall())
