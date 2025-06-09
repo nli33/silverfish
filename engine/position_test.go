@@ -1,4 +1,4 @@
-package test
+package engine_test
 
 import (
 	"silverfish/engine"
