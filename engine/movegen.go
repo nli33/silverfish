@@ -19,6 +19,7 @@ func GenMoves(pos Position) []Move {
 	}
 
 	moveList = append(moveList, GetPawnMoves(pos, blockers)...)
+	moveList = append(moveList, GetCastlingMoves(pos, blockers)...)
 
 	return moveList
 }
@@ -115,31 +116,28 @@ func GetKnightMoves(square Square) Bitboard {
 	return KnightMoves[square]
 }
 
-func GetKingMoves(pos Position, square Square) []Move {
-	movesBB := KingMoves[square]
-	moves := make([]Move, 0)
+func GetCastlingMoves(pos Position, blockers Bitboard) []Move {
+	var moveList []Move
 
-	for movesBB != 0 {
-		destSquare := PopLsb(&movesBB);
-		moves = append(moves, NewMove(square, destSquare))
+	if pos.Turn == White && pos.CanWhiteCastleKingside(blockers) {
+		moveList = append(moveList, NewMoveCastle(WhiteKingside))
 	}
 
-	if pos.Turn == White && pos.CanWhiteCastleKingside() {
-		moves = append(moves, NewMoveCastle(WhiteKingside))
+	if pos.Turn == Black && pos.CanBlackCastleKingside(blockers) {
+		moveList = append(moveList, NewMoveCastle(BlackKingside))
 	}
 
-	if pos.Turn == Black && pos.CanBlackCastleKingside() {
-		moves = append(moves, NewMoveCastle(BlackKingside))
+	if pos.Turn == White && pos.CanWhiteCastleQueenside(blockers) {
+		moveList = append(moveList, NewMoveCastle(WhiteQueenside))
 	}
 
-	if pos.Turn == White && pos.CanWhiteCastleQueenside() {
-		moves = append(moves, NewMoveCastle(WhiteQueenside))
+	if pos.Turn == Black && pos.CanBlackCastleQueenside(blockers) {
+		moveList = append(moveList, NewMoveCastle(BlackQueenside))
 	}
 
-	if pos.Turn == Black && pos.CanBlackCastleQueenside() {
-		moves = append(moves, NewMoveCastle(BlackQueenside))
-	}
+	return moveList
+}
 
-
-	return moves
+func GetKingMoves(square Square) Bitboard {
+	return KingMoves[square]
 }

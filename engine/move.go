@@ -24,12 +24,15 @@ func NewPromotionMove(from Square, to Square, promotion uint8) Move {
 }
 
 func NewMoveCastle(side uint8) Move {
-	// TODO
-	switch (side) {
+	switch side {
 	case WhiteKingside:
+		return NewMove(SquareE1, SquareG1) | CastlingFlag
 	case WhiteQueenside:
+		return NewMove(SquareE1, SquareC1) | CastlingFlag
 	case BlackKingside:
+		return NewMove(SquareE8, SquareG8) | CastlingFlag
 	case BlackQueenside:
+		return NewMove(SquareE8, SquareC8) | CastlingFlag
 	}
 	return Move(0)
 }

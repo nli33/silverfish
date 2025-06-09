@@ -152,13 +152,6 @@ const (
 var BishopDirections = []int8{NorthEast, SouthEast, NorthWest, SouthWest}
 var RookDirections = []int8{North, South, East, West}
 
-const (
-	WhiteKingside uint8 = 1 << iota
-	WhiteQueenside
-	BlackKingside
-	BlackQueenside
-)
-
 var Default = [2][6]Bitboard{
 	{
 		Bitboard(0xff00),

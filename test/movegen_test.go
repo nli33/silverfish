@@ -364,8 +364,83 @@ func TestEnPassant(t *testing.T) {
 	}
 }
 
-func TestCastling(t *testing.T) {
+func TestCastlingMoves(t *testing.T) {
+	pieces := [2][6]engine.Bitboard{
+		{
+			engine.Bitboard(0),
+			engine.Bitboard(0),
+			engine.Bitboard(0x0000000000000020),
+			engine.Bitboard(0x0000000000000081),
+			engine.Bitboard(0),
+			engine.Bitboard(0x0000000000000010),
+		},
+		{
+			engine.Bitboard(0),
+			engine.Bitboard(0x0200000000000000),
+			engine.Bitboard(0),
+			engine.Bitboard(0x8100000000000000),
+			engine.Bitboard(0x0800000000000000),
+			engine.Bitboard(0x1000000000000000),
+		},
+	}
+	pos := engine.Position{
+		Pieces:         pieces,
+		CastlingRights: 0b1111,
+	}
+	blockers := pos.Blockers()
 
+	pos.Turn = engine.White
+	gotMoves := engine.GetCastlingMoves(pos, blockers)
+	wantMoves := []engine.Move{
+		engine.NewMoveCastle(engine.WhiteQueenside),
+	}
+	if !equalSets(gotMoves, wantMoves) {
+		t.Errorf(`TestCastlingMoves(%d)`, pos.Turn)
+		fmt.Println("Got:")
+		for _, move := range gotMoves {
+			fmt.Printf("%s\n", move.ToString())
+		}
+		fmt.Println("Want:")
+		for _, move := range wantMoves {
+			fmt.Printf("%s\n", move.ToString())
+		}
+		fmt.Println()
+	}
+
+	// No castling rights on white queenside
+	pos.CastlingRights = 0b1101
+	gotMoves = engine.GetCastlingMoves(pos, blockers)
+	wantMoves = []engine.Move{}
+	if !equalSets(gotMoves, wantMoves) {
+		t.Errorf(`TestCastlingMoves(%d)`, pos.Turn)
+		fmt.Println("Got:")
+		for _, move := range gotMoves {
+			fmt.Printf("%s\n", move.ToString())
+		}
+		fmt.Println("Want:")
+		for _, move := range wantMoves {
+			fmt.Printf("%s\n", move.ToString())
+		}
+		fmt.Println()
+	}
+
+	pos.Turn = engine.Black
+	gotMoves = engine.GetCastlingMoves(pos, blockers)
+	wantMoves = []engine.Move{
+		engine.NewMoveCastle(engine.BlackKingside),
+	}
+	if !equalSets(gotMoves, wantMoves) {
+		t.Errorf(`TestCastlingMoves(%d)`, pos.Turn)
+		fmt.Println("Got:")
+		for _, move := range gotMoves {
+			fmt.Printf("%s\n", move.ToString())
+		}
+		fmt.Println("Want:")
+		for _, move := range wantMoves {
+			fmt.Printf("%s\n", move.ToString())
+		}
+		fmt.Println()
+	}
 }
 
 func init() {
