@@ -104,3 +104,32 @@ func (pos *Position) CanBlackCastleQueenside(blockers Bitboard) bool {
 func (pos *Position) Blockers() Bitboard {
 	return Merge(append(pos.Pieces[0][:], pos.Pieces[1][:]...))
 }
+
+// checking for attackers:
+// just check the 8 knight squares, diagonals, and horizontal/vertical
+
+// return bitboard of a specific side's pieces that attack a square
+func (pos *Position) AttackersFrom(sq Square, color uint8) Bitboard {
+	var attackers Bitboard
+	blockers := pos.Blockers()
+
+	orthogonal := GetRookMoves(sq, blockers)
+	diagonal := GetBishopMoves(sq, blockers)
+	knightMoves := GetKnightMoves(sq)
+	kingMoves := GetKingMoves(sq)
+	pawnCaptures := PawnCaptures[color^1][sq]
+
+	attackers |= pos.Pieces[color][Rook] & orthogonal
+	attackers |= pos.Pieces[color][Bishop] & diagonal
+	attackers |= pos.Pieces[color][Queen] & (orthogonal | diagonal)
+	attackers |= pos.Pieces[color][Knight] & knightMoves
+	attackers |= pos.Pieces[color][King] & kingMoves
+	attackers |= pos.Pieces[color][Pawn] & pawnCaptures
+
+	return attackers
+}
+
+// return bitboard of all pieces attacking a square
+func (pos *Position) Attackers(sq Square) Bitboard {
+	return pos.AttackersFrom(sq, White) | pos.AttackersFrom(sq, Black)
+}
