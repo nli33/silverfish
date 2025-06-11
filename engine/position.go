@@ -83,6 +83,13 @@ func (pos *Position) CanBlackCastleQueenside(blockers Bitboard) bool {
 	return pos.CastlingRights&BlackQueenside != 0 && blockers&BlackQueensideMask == 0
 }
 
+func (pos *Position) KingInCheck(color uint8) bool {
+	kingBB := pos.Pieces[color][King]
+	kingSquare := PopLsb(&kingBB)
+
+	return pos.AttackersFrom(kingSquare, color) != 0
+}
+
 /* func (pos *Position) IsLegal(move Move) bool {
 	var fromColor, fromPiece = pos.GetSquare(move.From())
 	var toColor, toPiece = pos.GetSquare(move.To())
