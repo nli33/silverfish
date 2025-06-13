@@ -96,6 +96,8 @@ func GetPieceMoves(piece uint8, square Square, blockers Bitboard, color uint8) B
 		return GetRookMoves(square, blockers)
 	case Queen:
 		return GetBishopMoves(square, blockers) | GetRookMoves(square, blockers)
+	case King:
+		return GetKingMoves(square)
 	}
 	return Bitboard(0)
 }

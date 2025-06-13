@@ -89,8 +89,8 @@ func (m Move) IsEnPassant() bool {
 	return m&EnPassantFlag == EnPassantFlag
 }
 
-func (m Move) Type() uint8 {
-	return uint8(m & PromotionFlag)
+func (m Move) Type() int {
+	return int(m & PromotionFlag)
 }
 
 func (m Move) ToString() string {
