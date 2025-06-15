@@ -3,7 +3,10 @@
 package engine
 
 import (
+	"fmt"
 	"math/bits"
+	"strconv"
+	"strings"
 )
 
 type Position struct {
@@ -83,6 +86,172 @@ func (pos *Position) GetSquare(square Square) (uint8, uint8) {
 		}
 	}
 	return NoColor, NoPiece
+}
+
+func (pos *Position) FullMoves() uint16 {
+	return (pos.Ply)/2 + 1
+}
+
+func (pos *Position) ToFEN() string {
+	fen := ""
+	spaceCounter := 0
+	for rank := Rank8; Rank8 >= rank && rank >= Rank1; rank-- {
+		for file := FileA; file <= FileH; file++ {
+			sq := NewSquare(rank, file)
+			color, piece := pos.GetSquare(sq)
+
+			if piece == NoPiece {
+				spaceCounter++
+				continue
+			}
+			if spaceCounter > 0 {
+				fen += fmt.Sprint(spaceCounter)
+				spaceCounter = 0
+			}
+
+			char := PieceToChar[piece]
+			if color == White { // capitalize
+				char -= 32
+			}
+			fen += string(char)
+		}
+		if spaceCounter > 0 {
+			fen += fmt.Sprint(spaceCounter)
+			spaceCounter = 0
+		}
+		if rank != Rank1 {
+			fen += "/"
+		}
+	}
+
+	if pos.Turn == White {
+		fen += " w "
+	} else {
+		fen += " b "
+	}
+
+	// only checking castling rights, not blockers
+	if pos.CastlingRights&WhiteKingside > 0 {
+		fen += "K"
+	}
+	if pos.CastlingRights&WhiteQueenside > 0 {
+		fen += "Q"
+	}
+	if pos.CastlingRights&BlackKingside > 0 {
+		fen += "k"
+	}
+	if pos.CastlingRights&BlackQueenside > 0 {
+		fen += "q"
+	}
+	if pos.CastlingRights == 0 {
+		fen += "-"
+	}
+
+	fen += " "
+	if pos.EnPassantSquare != NoSquare &&
+		(RankOf(pos.EnPassantSquare) == 3 ||
+			RankOf(pos.EnPassantSquare) == 6) {
+		fen += pos.EnPassantSquare.ToString()
+	} else {
+		fen += "-"
+	}
+
+	fen += " " + fmt.Sprint(pos.Rule50)
+	fen += " " + fmt.Sprint(pos.FullMoves())
+
+	return fen
+}
+
+func FromFEN(fen string) Position {
+	var pos Position
+
+	parts := strings.Split(fen, " ")
+	if len(parts) < 6 {
+		panic("invalid FEN: not enough parts")
+	}
+
+	boardPart := parts[0]
+	turnPart := parts[1]
+	castlingPart := parts[2]
+	enPassantPart := parts[3]
+	rule50Part := parts[4]
+	fullmovePart := parts[5]
+
+	rank := Rank8
+	file := FileA
+
+	for _, char := range boardPart {
+		if char == '/' {
+			rank--
+			file = FileA
+		} else if char >= '1' && char <= '8' {
+			file += uint8(char - '0')
+		} else {
+			var color uint8
+			if char >= 'A' && char <= 'Z' {
+				color = White
+				char += 32 // make lowercase
+			} else {
+				color = Black
+			}
+
+			piece, exists := CharToPiece[byte(char)]
+
+			if !exists {
+				panic("invalid piece character: " + string(char))
+			}
+
+			sq := NewSquare(rank, file)
+			pos.Pieces[color][piece] |= 1 << sq
+			file++
+		}
+	}
+
+	if turnPart == "w" {
+		pos.Turn = White
+	} else if turnPart == "b" {
+		pos.Turn = Black
+	} else {
+		panic("invalid turn field")
+	}
+
+	pos.CastlingRights = 0
+	if castlingPart != "-" {
+		for _, c := range castlingPart {
+			switch c {
+			case 'K':
+				pos.CastlingRights |= WhiteKingside
+			case 'Q':
+				pos.CastlingRights |= WhiteQueenside
+			case 'k':
+				pos.CastlingRights |= BlackKingside
+			case 'q':
+				pos.CastlingRights |= BlackQueenside
+			default:
+				panic("invalid castling character")
+			}
+		}
+	}
+
+	if enPassantPart == "-" {
+		pos.EnPassantSquare = NoSquare
+	} else {
+		pos.EnPassantSquare = NewSquareFromStr(enPassantPart)
+	}
+
+	rule50, err := strconv.Atoi(rule50Part)
+	if err != nil {
+		panic("invalid rule50 field")
+	}
+	pos.Rule50 = uint8(rule50)
+
+	fullmove, err := strconv.Atoi(fullmovePart)
+	if err != nil {
+		panic("invalid fullmove field")
+	}
+	pos.Ply = uint16((fullmove-1)*2 + int(pos.Turn))
+
+	return pos
 }
 
 // returns position after move, regardless of legality or pseudo-legality

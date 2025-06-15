@@ -45,6 +45,66 @@ func TestGetSquare(t *testing.T) {
 	}
 }
 
+func TestFEN(t *testing.T) {
+	pos := engine.StartingPosition()
+	wantFEN := "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+	gotFEN := pos.ToFEN()
+	if wantFEN != gotFEN {
+		t.Errorf("ToFEN()")
+		fmt.Println("Got:")
+		fmt.Println(gotFEN)
+		fmt.Println("Want:")
+		fmt.Println(wantFEN)
+	}
+
+	pieces := [2][6]engine.Bitboard{
+		{
+			engine.Bitboard(0x0080000000004000),
+			engine.Bitboard(0x0000000000000000),
+			engine.Bitboard(0x0000000000000000),
+			engine.Bitboard(0x0000000000000001),
+			engine.Bitboard(0x0000000000000000),
+			engine.Bitboard(0x0000000000000010),
+		},
+		{
+			engine.Bitboard(0x0000000020000000),
+			engine.Bitboard(0x0000000001000000),
+			engine.Bitboard(0x0000000000000000),
+			engine.Bitboard(0x0000000000000000),
+			engine.Bitboard(0x0000000000000000),
+			engine.Bitboard(0x0200000000000000),
+		},
+	}
+	pos = engine.Position{
+		Pieces:          pieces,
+		Turn:            engine.White,
+		CastlingRights:  0b0010,
+		Rule50:          4,
+		Ply:             56,
+		EnPassantSquare: engine.NoSquare,
+	}
+
+	wantFEN = "1k6/7P/8/8/n4p2/8/6P1/R3K3 w Q - 4 29"
+	gotFEN = pos.ToFEN()
+	if wantFEN != gotFEN {
+		t.Errorf("ToFEN()")
+		fmt.Println("Got:")
+		fmt.Println(gotFEN)
+		fmt.Println("Want:")
+		fmt.Println(wantFEN)
+	}
+
+	wantPos := pos
+	gotPos := engine.FromFEN(wantFEN)
+	if !wantPos.Equals(gotPos) {
+		t.Errorf("FromFEN()")
+		fmt.Println("Parsed Position:")
+		fmt.Println(gotFEN)
+		fmt.Println("Actual Position:")
+		fmt.Println(wantFEN)
+	}
+}
+
 func TestAttackers(t *testing.T) {
 	pieces := [2][6]engine.Bitboard{
 		{
