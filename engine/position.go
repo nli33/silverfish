@@ -259,7 +259,7 @@ func FromFEN(fen string) Position {
 
 // returns position after move, regardless of legality or pseudo-legality
 // copies the current board (doesn't modify original)
-// potentially works as a "make move" function?
+// keeping for now, since it might be a bit faster than DoMove ? (no state saving needed, no undo needed)
 func (pos Position) After(move Move) Position {
 	ourColor, piece := pos.GetSquare(move.From())
 	oppColor := ourColor ^ 1
@@ -285,6 +285,127 @@ func (pos Position) After(move Move) Position {
 		pos.Pieces[ourColor][piece] |= 1 << move.To()
 	}
 	return pos
+}
+
+func (pos *Position) DoMove(move Move) {
+	ourColor, movingPiece := pos.GetSquare(move.From())
+	if ourColor != pos.Turn {
+		panic("not our turn")
+	}
+	// don't use opp color from here, since en passants will yield NoColor
+	_, capturedPiece := pos.GetSquare(move.To())
+
+	// save the current state before moving
+	// CapturedPiece will not include pawns captured en passant
+	state := State{
+		MovedPiece:      movingPiece,
+		CapturedPiece:   capturedPiece, // may be NoPiece
+		CastlingRights:  pos.CastlingRights,
+		Rule50:          pos.Rule50,
+		EnPassantSquare: pos.EnPassantSquare,
+	}
+
+	pos.Rule50++
+
+	// update en passant square
+	if movingPiece == Pawn {
+		dist := int(move.To()) - int(move.From())
+		pawnDisplacement := PawnDisplacement(ourColor)
+		if dist == 2*pawnDisplacement {
+			pos.EnPassantSquare = Square(int(move.To()) - pawnDisplacement)
+		} else {
+			pos.EnPassantSquare = NoSquare
+		}
+		pos.Rule50 = 0
+	} else {
+		pos.EnPassantSquare = NoSquare
+	}
+
+	// update castling rights
+	if movingPiece == King {
+		if ourColor == White {
+			pos.CastlingRights &^= 0b0011
+		} else if ourColor == Black {
+			pos.CastlingRights &^= 0b1100
+		}
+	} else if movingPiece == Rook {
+		switch move.From() {
+		case SquareA1:
+			pos.CastlingRights &^= 0b0010
+		case SquareA8:
+			pos.CastlingRights &^= 0b0001
+		case SquareH1:
+			pos.CastlingRights &^= 0b1000
+		case SquareH8:
+			pos.CastlingRights &^= 0b0100
+		}
+	}
+
+	pos.Pieces[ourColor][movingPiece] &^= 1 << move.From()
+
+	if move.IsCastling() {
+		rookFromSquare := RookSquares[move]
+		pos.Pieces[ourColor][Rook] &^= 1 << rookFromSquare
+		rookToSquare := Square(int(move.To()) - KingCastlingDirection(move))
+		pos.Pieces[ourColor][Rook] |= 1 << rookToSquare
+		pos.Pieces[ourColor][King] |= 1 << move.To()
+	} else if move.IsEnPassant() {
+		capturedPawnSq := Square(int(move.To()) - PawnDisplacement(ourColor))
+		pos.Pieces[ourColor^1][Pawn] &^= 1 << capturedPawnSq
+		pos.Pieces[ourColor][movingPiece] |= 1 << move.To()
+	} else if move.IsPromotion() {
+		pos.Pieces[ourColor][move.Promotion()] |= 1 << move.To()
+	} else {
+		if capturedPiece != NoPiece { // is a capture
+			pos.Pieces[ourColor^1][capturedPiece] &^= 1 << move.To()
+			pos.Rule50 = 0
+		}
+		pos.Pieces[ourColor][movingPiece] |= 1 << move.To()
+	}
+
+	pos.Ply++
+	pos.Turn ^= 1
+	pos.History = append(pos.History, state)
+}
+
+func (pos *Position) UndoMove(move Move) {
+	n := len(pos.History)
+	if n == 0 {
+		panic("no reversible moves")
+	}
+	lastState := pos.History[n-1]
+	pos.History = pos.History[:n-1]
+
+	pos.Turn ^= 1
+	pos.Ply--
+	// pos.Turn is now the side that did the move
+
+	pos.CastlingRights = lastState.CastlingRights
+	pos.EnPassantSquare = lastState.EnPassantSquare
+	pos.Rule50 = lastState.Rule50
+
+	// put moved piece back to origin square
+	pos.Pieces[pos.Turn][lastState.MovedPiece] |= 1 << move.From()
+
+	if move.IsEnPassant() {
+		capturedPawnSq := Square(int(move.To()) - PawnDisplacement(pos.Turn))
+		pos.Pieces[pos.Turn][lastState.MovedPiece] &^= 1 << move.To() // remove capturer
+		pos.Pieces[pos.Turn^1][Pawn] |= 1 << capturedPawnSq           // put captured pawn back
+	} else if move.IsCastling() {
+		rookFromSquare := RookSquares[move]
+		rookToSquare := Square(int(move.To()) - KingCastlingDirection(move))
+		pos.Pieces[pos.Turn][Rook] &^= 1 << rookToSquare  // remove rook
+		pos.Pieces[pos.Turn][Rook] |= 1 << rookFromSquare // place rook
+		pos.Pieces[pos.Turn][King] &^= 1 << move.To()     // remove king
+	} else if move.IsPromotion() {
+		pos.Pieces[pos.Turn][move.Promotion()] &^= 1 << move.To() // remove promoted piece
+	} else { // quiet move
+		pos.Pieces[pos.Turn][lastState.MovedPiece] &^= 1 << move.To() // remove piece
+	}
+
+	if lastState.CapturedPiece != NoPiece { // capture
+		pos.Pieces[pos.Turn^1][lastState.CapturedPiece] |= 1 << move.To() // put piece back
+	}
 }
 
 // Note: As long as castling rights are updated properly we don't need to check for
