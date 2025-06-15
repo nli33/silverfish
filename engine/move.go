@@ -68,11 +68,11 @@ func (m Move) IsPromotion() bool {
 }
 
 func (m Move) IsCastling() bool {
-	return m&CastlingFlag == CastlingFlag
+	return m&PromotionFlag == CastlingFlag
 }
 
 func (m Move) IsEnPassant() bool {
-	return m&EnPassantFlag == EnPassantFlag
+	return m&PromotionFlag == EnPassantFlag
 }
 
 func (m Move) Type() int {
