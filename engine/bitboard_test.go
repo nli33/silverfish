@@ -10,7 +10,7 @@ func TestSliderBlockerMask(t *testing.T) {
 	piece := engine.Bishop
 	square := engine.SquareD3
 	gotBB := engine.SliderBlockerMask(piece, square)
-	wantBB := engine.Bitboard(0b00000000_00000000_01000000_00100010_00010100_00000000_00010100_00000000)
+	wantBB := engine.Bitboard(0x0000402214001400)
 	if gotBB != wantBB {
 		t.Errorf(`SliderBlockerMask(%d, %d)`, piece, square)
 		fmt.Printf("Got:\n%s\n", gotBB.ToString())
@@ -20,7 +20,7 @@ func TestSliderBlockerMask(t *testing.T) {
 	piece = engine.Rook
 	square = engine.SquareH1
 	gotBB = engine.SliderBlockerMask(piece, square)
-	wantBB = engine.Bitboard(0b00000000_10000000_10000000_10000000_10000000_10000000_10000000_01111110)
+	wantBB = engine.Bitboard(0x008080808080807e)
 	if gotBB != wantBB {
 		t.Errorf(`SliderBlockerMask(%d, %d)`, piece, square)
 		fmt.Printf("Got:\n%s\n", gotBB.ToString())
