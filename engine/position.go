@@ -17,11 +17,27 @@ type Position struct {
 	// 2 - can black castle kingside?
 	// 3 - can black castle queenside?
 	CastlingRights uint8
-	Rule50         uint8
+
+	// half-move clock
+	Rule50 uint8
+
+	// number of turns
+	Ply uint16
 
 	// square that is available for en passant, or NoSquare if no enpassant available
 	// basically the square that the last pawn skipped over (if it moved forward 2 squares)
 	EnPassantSquare Square
+
+	// past states
+	History []State
+}
+
+type State struct {
+	CastlingRights  uint8
+	EnPassantSquare Square
+	Rule50          uint8
+	CapturedPiece   uint8
+	MovedPiece      uint8
 }
 
 const (
@@ -31,19 +47,20 @@ const (
 	BlackQueenside
 )
 
-func NewPosition() *Position {
+func NewPosition() Position {
 	p := Position{}
-	return &p
+	return p
 }
 
-func StartingPosition() *Position {
+func StartingPosition() Position {
 	p := Position{
-		Turn:           0,
+		Turn:           White,
 		Pieces:         Default,
 		CastlingRights: 0b00001111,
 		Rule50:         0,
+		Ply:            0,
 	}
-	return &p
+	return p
 }
 
 /* func (pos *Position) DoMove(move Move) bool {

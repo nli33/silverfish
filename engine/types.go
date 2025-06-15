@@ -135,6 +135,7 @@ var PieceToChar = map[uint8]byte{
 	Rook:    'r',
 	Bishop:  'b',
 	Knight:  'n',
+	Pawn:    'p',
 	NoPiece: '_',
 }
 
