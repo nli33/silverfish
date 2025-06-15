@@ -202,28 +202,7 @@ func TestKingMoves(t *testing.T) {
 }
 
 func TestPawnMoves(t *testing.T) {
-	pieces := [2][6]engine.Bitboard{
-		{
-			engine.Bitboard(0x0014008000086200),
-			engine.Bitboard(0x0000000020400000),
-			engine.Bitboard(0),
-			engine.Bitboard(0),
-			engine.Bitboard(0),
-			engine.Bitboard(0),
-		},
-		{
-			engine.Bitboard(0x0001400014008000),
-			engine.Bitboard(0),
-			engine.Bitboard(0x0800000000000000),
-			engine.Bitboard(0),
-			engine.Bitboard(0),
-			engine.Bitboard(0x1000000000000000),
-		},
-	}
-	pos := engine.Position{
-		Pieces:          pieces,
-		EnPassantSquare: engine.NoSquare,
-	}
+	pos := engine.FromFEN("3bk3/p1P1P3/6p1/7P/2p1pN2/3P2N1/1P3PPp/8 w - - 0 1")
 	blockers := pos.Blockers()
 
 	pos.Turn = engine.White
@@ -298,27 +277,7 @@ func TestPawnMoves(t *testing.T) {
 }
 
 func TestEnPassant(t *testing.T) {
-	pieces := [2][6]engine.Bitboard{
-		{
-			engine.Bitboard(0x0000008002000000),
-			engine.Bitboard(0),
-			engine.Bitboard(0),
-			engine.Bitboard(0),
-			engine.Bitboard(0),
-			engine.Bitboard(0),
-		},
-		{
-			engine.Bitboard(0x0000004004000000),
-			engine.Bitboard(0),
-			engine.Bitboard(0),
-			engine.Bitboard(0),
-			engine.Bitboard(0),
-			engine.Bitboard(0),
-		},
-	}
-	pos := engine.Position{
-		Pieces: pieces,
-	}
+	pos := engine.FromFEN("8/8/8/6pP/1Pp5/8/8/8 w - - 0 1")
 	blockers := pos.Blockers()
 
 	pos.Turn = engine.Black
@@ -365,28 +324,7 @@ func TestEnPassant(t *testing.T) {
 }
 
 func TestCastlingMoves(t *testing.T) {
-	pieces := [2][6]engine.Bitboard{
-		{
-			engine.Bitboard(0),
-			engine.Bitboard(0),
-			engine.Bitboard(0x0000000000000020),
-			engine.Bitboard(0x0000000000000081),
-			engine.Bitboard(0),
-			engine.Bitboard(0x0000000000000010),
-		},
-		{
-			engine.Bitboard(0),
-			engine.Bitboard(0x0200000000000000),
-			engine.Bitboard(0),
-			engine.Bitboard(0x8100000000000000),
-			engine.Bitboard(0x0800000000000000),
-			engine.Bitboard(0x1000000000000000),
-		},
-	}
-	pos := engine.Position{
-		Pieces:         pieces,
-		CastlingRights: 0b1111,
-	}
+	pos := engine.FromFEN("rn1qk2r/8/8/8/8/8/8/R3KB1R w KQkq - 0 1")
 	blockers := pos.Blockers()
 
 	pos.Turn = engine.White

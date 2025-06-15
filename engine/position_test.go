@@ -106,27 +106,7 @@ func TestFEN(t *testing.T) {
 }
 
 func TestAttackers(t *testing.T) {
-	pieces := [2][6]engine.Bitboard{
-		{
-			engine.Bitboard(0x0000000000200000),
-			engine.Bitboard(0x0000000000000800),
-			engine.Bitboard(0x0000400000000080),
-			engine.Bitboard(0x0000000080000000),
-			engine.Bitboard(0x0002000001000000),
-			engine.Bitboard(0x0000000000080000),
-		},
-		{
-			engine.Bitboard(0x0000000800000000),
-			engine.Bitboard(0x0000000400000000),
-			engine.Bitboard(0x0080000000000000),
-			engine.Bitboard(0x0000000000001000),
-			engine.Bitboard(0),
-			engine.Bitboard(0),
-		},
-	}
-	pos := engine.Position{
-		Pieces: pieces,
-	}
+	pos := engine.FromFEN("8/1Q5b/6B1/2np4/Q6R/3K1P2/3Nr3/7B w - - 0 1")
 	square := engine.SquareE4
 
 	color := engine.White
@@ -163,28 +143,7 @@ func TestAttackers(t *testing.T) {
 }
 
 func TestLegalMoves(t *testing.T) {
-	pieces := [2][6]engine.Bitboard{
-		{
-			engine.Bitboard(0x0080000000000000), // Pawns (P)
-			engine.Bitboard(0x0000000000000000), // Knights (N)
-			engine.Bitboard(0x0000000000000000), // Bishops (B)
-			engine.Bitboard(0x0000000000000081), // Rooks (R)
-			engine.Bitboard(0x0000000000000000), // Queens (Q)
-			engine.Bitboard(0x0000000000000010), // King (K)
-		},
-		{
-			engine.Bitboard(0x0000000000000000), // Pawns (p)
-			engine.Bitboard(0x0000000000000000), // Knights (n)
-			engine.Bitboard(0x0000000020000000), // Bishops (b)
-			engine.Bitboard(0x0000000000000000), // Rooks (r)
-			engine.Bitboard(0x0000000000000000), // Queens (q)
-			engine.Bitboard(0x0200000000000000), // King (k)
-		},
-	}
-	pos := engine.Position{
-		Pieces:         pieces,
-		CastlingRights: 0b0011,
-	}
+	pos := engine.FromFEN("1k6/7P/8/8/5b2/8/8/R3K2R w KQ - 0 1")
 
 	pos.Turn = engine.White
 	gotMoves := pos.LegalMoves()
@@ -268,28 +227,7 @@ func TestLegalMoves(t *testing.T) {
 		fmt.Println()
 	}
 
-	pieces = [2][6]engine.Bitboard{
-		{
-			engine.Bitboard(0x0000000008000000),
-			engine.Bitboard(0x0000000000000000),
-			engine.Bitboard(0x0000000000200000),
-			engine.Bitboard(0x0000000000000000),
-			engine.Bitboard(0x0000000000000002),
-			engine.Bitboard(0x0000000000000010),
-		},
-		{
-			engine.Bitboard(0x0000000014000000),
-			engine.Bitboard(0x0000000000000000),
-			engine.Bitboard(0x0000000000000000),
-			engine.Bitboard(0x0000000000000001),
-			engine.Bitboard(0x0000000000000000),
-			engine.Bitboard(0x0100000000000000),
-		},
-	}
-	pos = engine.Position{
-		Pieces:          pieces,
-		EnPassantSquare: engine.SquareD3,
-	}
+	pos = engine.FromFEN("k7/8/8/8/2pPp3/5B2/8/rQ2K3 w - - 0 1")
 
 	pos.Turn = engine.White
 	gotMoves = pos.LegalMoves()
@@ -329,6 +267,7 @@ func TestLegalMoves(t *testing.T) {
 	}
 
 	pos.Turn = engine.Black
+	pos.EnPassantSquare = engine.SquareD3
 	gotMoves = pos.LegalMoves()
 	wantMoves = []engine.Move{
 		// rook

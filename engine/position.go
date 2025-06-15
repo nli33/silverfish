@@ -29,6 +29,9 @@ type Position struct {
 
 	// square that is available for en passant, or NoSquare if no enpassant available
 	// basically the square that the last pawn skipped over (if it moved forward 2 squares)
+	//
+	// note: field should only be set for the halfmove right after a pawn moves forward 2 squares
+	// example: after a2a4, EPsq = a3. After black moves (not EP), it is NoSquare
 	EnPassantSquare Square
 
 	// past states
