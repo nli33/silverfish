@@ -63,9 +63,14 @@ func StartingPosition() Position {
 	return p
 }
 
-/* func (pos *Position) DoMove(move Move) bool {
-	return true
-} */
+func (pos *Position) Equals(otherPos Position) bool {
+	return pos.Turn == otherPos.Turn &&
+		pos.Pieces == otherPos.Pieces &&
+		pos.CastlingRights == otherPos.CastlingRights &&
+		pos.Rule50 == otherPos.Rule50 &&
+		pos.Ply == otherPos.Ply &&
+		pos.EnPassantSquare == otherPos.EnPassantSquare
+}
 
 func (pos *Position) GetSquare(square Square) (uint8, uint8) {
 	var color, piece uint8
