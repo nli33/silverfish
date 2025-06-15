@@ -149,8 +149,8 @@ func (pos *Position) ToFEN() string {
 
 	fen += " "
 	if pos.EnPassantSquare != NoSquare &&
-		(RankOf(pos.EnPassantSquare) == 3 ||
-			RankOf(pos.EnPassantSquare) == 6) {
+		(RankOf(pos.EnPassantSquare) == Rank3 ||
+			RankOf(pos.EnPassantSquare) == Rank6) {
 		fen += pos.EnPassantSquare.ToString()
 	} else {
 		fen += "-"
