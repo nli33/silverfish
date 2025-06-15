@@ -298,3 +298,119 @@ func TestLegalMoves(t *testing.T) {
 		fmt.Println()
 	}
 }
+
+func TestDoUndo(t *testing.T) {
+	pos := engine.FromFEN("1k6/7P/8/8/n4p2/8/6P1/R3K3 w Q - 4 29")
+
+	// king move
+	move := engine.NewMoveFromStr("e1f2")
+	pos.DoMove(move)
+	wantPos := engine.FromFEN("1k6/7P/8/8/n4p2/8/5KP1/R7 b - - 5 29")
+	if !pos.Equals(wantPos) || wantPos.ToFEN() != pos.ToFEN() {
+		t.Errorf(`DoMove(%s)`, move.ToString())
+		fmt.Println("Want: " + wantPos.ToFEN())
+		fmt.Println("Got: " + pos.ToFEN())
+	}
+
+	// undo king move
+	pos.UndoMove(move)
+	wantPos = engine.FromFEN("1k6/7P/8/8/n4p2/8/6P1/R3K3 w Q - 4 29")
+	if !pos.Equals(wantPos) || wantPos.ToFEN() != pos.ToFEN() {
+		t.Errorf(`UndoMove(%s)`, move.ToString())
+		fmt.Println("Want: " + wantPos.ToFEN())
+		fmt.Println("Got: " + pos.ToFEN())
+	}
+
+	// promotion to rook and check
+	move = engine.NewMoveFromStr("h7h8r")
+	pos.DoMove(move)
+	wantPos = engine.FromFEN("1k5R/8/8/8/n4p2/8/6P1/R3K3 b Q - 0 29")
+	if !pos.Equals(wantPos) || wantPos.ToFEN() != pos.ToFEN() {
+		t.Errorf(`DoMove(%s)`, move.ToString())
+		fmt.Println("Want: " + wantPos.ToFEN())
+		fmt.Println("Got: " + pos.ToFEN())
+	}
+
+	// black king evades check, white rook captures black knight
+	move2 := engine.NewMoveFromStr("b8c7")
+	move3 := engine.NewMoveFromStr("a1a4")
+	pos.DoMove(move2)
+	pos.DoMove(move3)
+	wantPos = engine.FromFEN("7R/2k5/8/8/R4p2/8/6P1/4K3 b - - 0 30")
+	if !pos.Equals(wantPos) || wantPos.ToFEN() != pos.ToFEN() {
+		t.Errorf(`DoMove(%s %s %s)`, move.ToString(), move2.ToString(), move3.ToString())
+		fmt.Println("Want: " + wantPos.ToFEN())
+		fmt.Println("Got: " + pos.ToFEN())
+	}
+
+	// undo capture of black knight
+	pos.UndoMove(move3)
+	wantPos = engine.FromFEN("7R/2k5/8/8/n4p2/8/6P1/R3K3 w Q - 1 30")
+	if !pos.Equals(wantPos) || wantPos.ToFEN() != pos.ToFEN() {
+		t.Errorf(`DoMove(%s %s)`, move.ToString(), move2.ToString())
+		fmt.Println("Want: " + wantPos.ToFEN())
+		fmt.Println("Got: " + pos.ToFEN())
+	}
+
+	// castle queenside
+	move3 = engine.NewMoveCastle(engine.WhiteQueenside)
+	if !pos.MoveIsLegal(move3) {
+		t.Errorf(`%s is illegal`, move3.ToString())
+	}
+	pos.DoMove(move3)
+	wantPos = engine.FromFEN(("7R/2k5/8/8/n4p2/8/6P1/2KR4 b - - 2 30"))
+	if !pos.Equals(wantPos) || wantPos.ToFEN() != pos.ToFEN() {
+		t.Errorf(`DoMove(%s %s %s)`, move.ToString(), move2.ToString(), move3.ToString())
+		fmt.Println("Want: " + wantPos.ToFEN())
+		fmt.Println("Got: " + pos.ToFEN())
+	}
+
+	// undo all, back to original pos
+	pos.UndoMove(move3)
+	pos.UndoMove(move2)
+	pos.UndoMove(move)
+	wantPos = engine.FromFEN("1k6/7P/8/8/n4p2/8/6P1/R3K3 w Q - 4 29")
+	if !pos.Equals(wantPos) || wantPos.ToFEN() != pos.ToFEN() {
+		t.Errorf(`UndoMove() 3x`)
+		fmt.Println("Want: " + wantPos.ToFEN())
+		fmt.Println("Got: " + pos.ToFEN())
+	}
+
+	// white pawn moves forward 2 squares, allowing en passant
+	move = engine.NewMoveFromStr("g2g4")
+	pos.DoMove(move)
+	wantPos = engine.FromFEN("1k6/7P/8/8/n4pP1/8/8/R3K3 b Q g3 0 29")
+	if !pos.Equals(wantPos) || wantPos.ToFEN() != pos.ToFEN() {
+		t.Errorf(`DoMove(%s)`, move.ToString())
+		fmt.Println("Want: " + wantPos.ToFEN())
+		fmt.Println("Got: " + pos.ToFEN())
+	}
+
+	// black captures en passant
+	move2 = engine.NewMoveFromStr("f4g3") | engine.EnPassantFlag
+	pos.DoMove(move2)
+	wantPos = engine.FromFEN("1k6/7P/8/8/n7/6p1/8/R3K3 w Q - 0 30")
+	if !pos.Equals(wantPos) || wantPos.ToFEN() != pos.ToFEN() {
+		t.Errorf(`DoMove(%s %s)`, move.ToString(), move2.ToString())
+		fmt.Println("Want: " + wantPos.ToFEN())
+		fmt.Println("Got: " + pos.ToFEN())
+	}
+
+	// undo black's en passant capture
+	pos.UndoMove(move2)
+	wantPos = engine.FromFEN("1k6/7P/8/8/n4pP1/8/8/R3K3 b Q g3 0 29")
+	if !pos.Equals(wantPos) || wantPos.ToFEN() != pos.ToFEN() {
+		t.Errorf(`DoMove(%s)`, move2.ToString())
+		fmt.Println("Want: " + wantPos.ToFEN())
+		fmt.Println("Got: " + pos.ToFEN())
+	}
+
+	// undo white pawn move
+	pos.UndoMove(move)
+	wantPos = engine.FromFEN("1k6/7P/8/8/n4p2/8/6P1/R3K3 w Q - 4 29")
+	if !pos.Equals(wantPos) || wantPos.ToFEN() != pos.ToFEN() {
+		t.Errorf(`UndoMove(%s)`, move.ToString())
+		fmt.Println("Want: " + wantPos.ToFEN())
+		fmt.Println("Got: " + pos.ToFEN())
+	}
+}
