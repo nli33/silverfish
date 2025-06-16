@@ -15,7 +15,7 @@ const (
 	UciSyncState
 )
 
-var uci_state = UciInitialState
+var UciState = UciInitialState
 
 type UciErrorType struct {
 	err string
@@ -40,7 +40,7 @@ func UciHandleMessages(stdin bufio.Scanner, pos *Position, should_continue *bool
 
 	message := stdin.Text()
 
-	switch uci_state {
+	switch UciState {
 	case UciIdleState:
 		if strings.HasPrefix(message, "position") {
 			position := strings.SplitN(message, " ", 2)
@@ -50,9 +50,9 @@ func UciHandleMessages(stdin bufio.Scanner, pos *Position, should_continue *bool
 				*pos = NewPosition()
 			}
 		} else if strings.HasPrefix(message, "go") {
-			uci_state = UciActiveState
+			UciState = UciActiveState
 		} else if message == "isready" {
-			uci_state = UciSyncState
+			UciState = UciSyncState
 		} else if message == "quit" {
 			*should_continue = false
 		} else {
@@ -63,40 +63,40 @@ func UciHandleMessages(stdin bufio.Scanner, pos *Position, should_continue *bool
 	case UciActiveState:
 		switch message {
 		case "isready":
-			uci_state = UciPingState
+			UciState = UciPingState
 			break
 		case "stop":
-			uci_state = UciHaltState
+			UciState = UciHaltState
 			break
 		default:
-			UciError(fmt.Sprintf("Sir, it is currently the %d state. You can't do %s", uci_state, message))
+			UciError(fmt.Sprintf("Sir, it is currently the %d state. You can't do %s", UciState, message))
 		}
 
 		break
 	default:
-		UciError(fmt.Sprintf("Sir, it is currently the %d state. You can't do %s", uci_state, message))
+		UciError(fmt.Sprintf("Sir, it is currently the %d state. You can't do %s", UciState, message))
 	}
 }
 
 func UciOk() error {
-	if uci_state != UciInitialState {
+	if UciState != UciInitialState {
 		return NewUciError("This can only be called in the initial state.")
 	}
 
-	uci_state = UciIdleState
+	UciState = UciIdleState
 	fmt.Print("uciok\n")
 	return nil
 }
 
 func UciReadyOk() {
-	switch uci_state {
+	switch UciState {
 	case UciSyncState:
 		fmt.Println("readyok")
-		uci_state = UciIdleState
+		UciState = UciIdleState
 		break
 	case UciPingState:
 		fmt.Println("readyok")
-		uci_state = UciActiveState
+		UciState = UciActiveState
 		break
 	default:
 		_ = fmt.Errorf("i think this is a bug...")
@@ -104,12 +104,12 @@ func UciReadyOk() {
 }
 
 func UciBestMove(move Move) error {
-	if uci_state != UciActiveState && uci_state != UciHaltState && uci_state != UciPingState {
+	if UciState != UciActiveState && UciState != UciHaltState && UciState != UciPingState {
 		return NewUciError("Cannot call this in states other than Active, Halt, or Ping")
 	}
 
 	fmt.Printf("bestmove %s\n", move.ToString())
-	uci_state = UciIdleState
+	UciState = UciIdleState
 	return nil
 }
 
