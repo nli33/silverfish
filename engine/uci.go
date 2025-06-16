@@ -86,6 +86,21 @@ func UciOk() error {
 	return nil
 }
 
+func UciReadyOk() {
+	switch uci_state {
+	case UciSyncState:
+		fmt.Println("readyok")
+		uci_state = UciIdleState
+		break
+	case UciPingState:
+		fmt.Println("readyok")
+		uci_state = UciActiveState
+		break
+	default:
+		_ = fmt.Errorf("i think this is a bug...")
+	}
+}
+
 func UciBestMove(move Move) error {
 	if uci_state != UciActiveState && uci_state != UciHaltState && uci_state != UciPingState {
 		return NewUciError("Cannot call this in states other than Active, Halt, or Ping")
