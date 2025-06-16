@@ -31,8 +31,16 @@ func main() {
 		case engine.UciSyncState:
 			engine.UciReadyOk()
 			break
-		case engine.UciActiveState:
+		case engine.UciPingState:
+			engine.UciReadyOk()
+			break
+		case engine.UciHaltState:
 			engine.UciBestMove(position.LegalMoves()[0])
+			break
+		case engine.UciActiveState:
+			fmt.Println("info depth 20 seldepth 10")
+			break
 		}
 	}
+
 }
