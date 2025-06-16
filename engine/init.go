@@ -19,6 +19,4 @@ func Init() {
 
 	UciSetEngineName("silverfish")
 	UciSetAuthor("silverfish developers")
-	UciSetProtocol(2)
-	UciError("HELLO")
 }
