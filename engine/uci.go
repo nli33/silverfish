@@ -43,11 +43,21 @@ func UciHandleMessages(stdin bufio.Scanner, pos *Position, should_continue *bool
 	switch UciState {
 	case UciIdleState:
 		if strings.HasPrefix(message, "position") {
-			position := strings.SplitN(message, " ", 2)
-			if position[1] == "fen" && len(position) > 2 {
-				*pos = FromFEN(position[2])
-			} else if position[1] == "startpos" {
+			parts := strings.Split(strings.TrimPrefix(message, "position "), "moves")
+			initial := strings.TrimSpace(parts[0])
+
+			if strings.HasPrefix(initial, "fen ") {
+				*pos = FromFEN(strings.TrimPrefix(initial, "fen "))
+			} else if initial == "startpos" {
 				*pos = StartingPosition()
+			}
+
+			if len(parts) > 1 {
+				moves := strings.Split(strings.TrimSpace(parts[1]), " ")
+
+				for _, move := range moves {
+					pos.DoMove(NewMoveFromStr(move))
+				}
 			}
 		} else if strings.HasPrefix(message, "go") {
 			UciState = UciActiveState
