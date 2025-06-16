@@ -1,9 +1,10 @@
 package main
 
 import (
-	"silverfish/engine"
+	"bufio"
 	"fmt"
 	"os"
+	"silverfish/engine"
 )
 
 func main() {
@@ -16,5 +17,14 @@ func main() {
 	if err != nil {
 		_ = fmt.Errorf("WHAT THE FUCK??")
 		os.Exit(69)
+	}
+
+	position := engine.NewPosition()
+	should_continue := true
+
+	stdinScanner := bufio.NewScanner(os.Stdin)
+
+	for should_continue {
+		engine.UciHandleMessages(*stdinScanner, &position, &should_continue)
 	}
 }
