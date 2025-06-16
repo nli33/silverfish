@@ -42,24 +42,24 @@ func UciBestMove(move Move) error {
 		return NewUciError("Cannot call this in states other than Active, Halt, or Ping")
 	}
 
-	fmt.Printf("bestmove %s", move.ToString())
+	fmt.Printf("bestmove %s\n", move.ToString())
 	return nil
 }
 
 func UciInfo(message string) {
-	fmt.Printf("info string %s", message)
+	fmt.Printf("info string %s\n", message)
 }
 
 func UciError(message string) {
-	fmt.Printf("info error %s", message)
+	fmt.Printf("info error %s\n", message)
 }
 
 func UciSetAuthor(name string) {
-	fmt.Printf("id author %s", name)
+	fmt.Printf("id author %s\n", name)
 }
 
 func UciSetEngineName(name string) {
-	fmt.Printf("id name %s", name)
+	fmt.Printf("id name %s\n", name)
 }
 
 // Normally, one should just use protocol 2, as that is the protocol that I am
