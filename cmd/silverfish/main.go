@@ -19,12 +19,20 @@ func main() {
 		os.Exit(69)
 	}
 
-	position := engine.NewPosition()
+	position := engine.StartingPosition()
 	should_continue := true
 
 	stdinScanner := bufio.NewScanner(os.Stdin)
 
 	for should_continue {
 		engine.UciHandleMessages(*stdinScanner, &position, &should_continue)
+
+		switch engine.UciState {
+		case engine.UciSyncState:
+			engine.UciReadyOk()
+			break
+		case engine.UciActiveState:
+			engine.UciBestMove(position.LegalMoves()[0])
+		}
 	}
 }
