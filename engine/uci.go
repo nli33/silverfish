@@ -37,6 +37,15 @@ func UciOk() error {
 	return nil
 }
 
+func UciBestMove(move Move) error {
+	if uci_state == UciActiveState || uci_state == UciHaltState || uci_state == UciPingState {
+		return NewUciError("Cannot call this in states other than Active, Halt, or Ping")
+	}
+
+	fmt.Printf("bestmove %s", move.ToString())
+	return nil
+}
+
 func UciInfo(message string) {
 	fmt.Printf("info string %s", message)
 }
