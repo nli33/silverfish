@@ -84,7 +84,7 @@ func UciOk() error {
 	}
 
 	uci_state = UciIdleState
-	fmt.Print("uciok")
+	fmt.Print("uciok\n")
 	return nil
 }
 
@@ -132,5 +132,5 @@ func UciSetEngineName(name string) {
 // Normally, one should just use protocol 2, as that is the protocol that I am
 // implementing.
 func UciSetProtocol(protocol uint8) {
-	fmt.Printf("protocol %d", protocol)
+	fmt.Printf("protocol %d\n", protocol)
 }
