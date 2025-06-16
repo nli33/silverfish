@@ -13,8 +13,28 @@ const (
 
 var uci_state = UciInitialState
 
-func UciOk() {
+type UciErrorType struct {
+	err string
+}
+
+func NewUciError(err string) *UciErrorType {
+	return &UciErrorType{
+		err: err,
+	}
+}
+
+func (err *UciErrorType) Error() string {
+	return err.err
+}
+
+func UciOk() error {
+	if uci_state != UciInitialState {
+		return NewUciError("This can only be called in the initial state.")
+	}
+
+	uci_state = UciIdleState
 	fmt.Print("uciok")
+	return nil
 }
 
 func UciInfo(message string) {
@@ -38,5 +58,3 @@ func UciSetEngineName(name string) {
 func UciSetProtocol(protocol uint8) {
 	fmt.Printf("protocol %d", protocol)
 }
-
-
