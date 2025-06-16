@@ -31,7 +31,7 @@ func (err *UciErrorType) Error() string {
 	return err.err
 }
 
-func UciHandleMessages(stdin bufio.Scanner, pos *Position) {
+func UciHandleMessages(stdin bufio.Scanner, pos *Position, should_continue *bool) {
 	result := stdin.Scan()
 	if !result {
 		UciError("I/O error or some shit.")
@@ -49,10 +49,12 @@ func UciHandleMessages(stdin bufio.Scanner, pos *Position) {
 			} else if position[1] == "startpos" {
 				*pos = NewPosition()
 			}
-		} else if message == "go" {
+		} else if strings.HasPrefix(message, "go") {
 			uci_state = UciActiveState
 		} else if message == "isready" {
 			uci_state = UciSyncState
+		} else if message == "quit" {
+			*should_continue = false
 		} else {
 			UciInfo("Not implemented")
 		}
