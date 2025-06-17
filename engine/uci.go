@@ -15,6 +15,59 @@ const (
 	UciSyncState
 )
 
+type UciGoMessage struct {
+	// When true, the engine should search infinitely
+	infinite bool
+
+	// A collection of moves to which the engine should restrict its
+	// consideration (in other words, the move reported with the bestmove
+	// message should be one of the moves in this collection),
+	searchMoves []Move
+
+	// Remember - 0 indicates that it was not specified.
+	// Hopefully this doesn't bite us in the ass
+
+	// An indication that the engine should attempt to prove
+	// a mate in this many full moves (or twice this many plies) and may
+	// assume that it does not need to examine lines beyond this many full
+	// moves (or twice this many plies)
+	mate int16
+
+	// Time limits (read spec for information. The one we are referencing
+	// has information about this on Page 14.)
+	whiteTime          int16
+	blackTime          int16
+	whiteClockIncrease int16
+	blackClockIncrease int16
+	movesToGo          int16
+
+	// For traditional α/β engines, the maximum length in ply
+	// of the principal variation (before extensions and reductions have been
+	// applied, and not including plies examined in a quiescing search) that
+	// the engine should explore
+	depth int16
+
+	// For traditional engines, the maximum number of positions (counted with
+	// multiplicity) that the engine should examine,
+	nodes int16
+}
+
+const (
+	UciEmptyClientMessage uint8 = iota
+	UciPositionClientMessage 
+	UciUciMessage
+	UciGoClientMessage
+	UciIsReadyClientMessage
+	UciQuitClientMessage
+	UciStopClientMessage
+)
+
+type UciClientMessage struct {
+	position    *Position
+	goMessage   *UciGoMessage
+	messageType uint8
+}
+
 var UciState = UciInitialState
 
 type UciErrorType struct {
@@ -31,61 +84,52 @@ func (err *UciErrorType) Error() string {
 	return err.err
 }
 
-func UciHandleMessages(stdin bufio.Scanner, pos *Position, should_continue *bool) {
+func UciProcessClientMessage(stdin bufio.Scanner) UciClientMessage {
+	message := UciClientMessage{}
+
 	result := stdin.Scan()
 	if !result {
 		UciError("I/O error or some shit.")
-		return
+		return message
 	}
 
-	message := stdin.Text()
+	textMessage := stdin.Text()
 
-	switch UciState {
-	case UciIdleState:
-		if strings.HasPrefix(message, "position") {
-			parts := strings.Split(strings.TrimPrefix(message, "position "), "moves")
-			initial := strings.TrimSpace(parts[0])
+	if strings.HasPrefix(textMessage, "position") {
+		parts := strings.Split(strings.TrimPrefix(textMessage, "position "), "moves")
+		initial := strings.TrimSpace(parts[0])
+		position := NewPosition()
 
-			if strings.HasPrefix(initial, "fen ") {
-				*pos = FromFEN(strings.TrimPrefix(initial, "fen "))
-			} else if initial == "startpos" {
-				*pos = StartingPosition()
-			}
-
-			if len(parts) > 1 {
-				moves := strings.Split(strings.TrimSpace(parts[1]), " ")
-
-				for _, move := range moves {
-					pos.DoMove(NewMoveFromStr(move))
-				}
-			}
-		} else if strings.HasPrefix(message, "go") {
-			UciState = UciActiveState
-		} else if message == "isready" {
-			UciState = UciSyncState
-		} else if message == "quit" {
-			*should_continue = false
-		} else {
-			UciInfo("Not implemented")
+		if strings.HasPrefix(initial, "fen ") {
+			position = FromFEN(strings.TrimPrefix(initial, "fen "))
+		} else if initial == "startpos" {
+			position = StartingPosition()
 		}
 
-		break
-	case UciActiveState:
-		switch message {
-		case "isready":
-			UciState = UciPingState
-			break
-		case "stop":
-			UciState = UciHaltState
-			break
-		default:
-			UciError(fmt.Sprintf("Sir, it is currently the %d state. You can't do %s", UciState, message))
+		if len(parts) > 1 {
+			moves := strings.Split(strings.TrimSpace(parts[1]), " ")
+
+			for _, move := range moves {
+				position.DoMove(NewMoveFromStr(move))
+			}
 		}
 
-		break
-	default:
-		UciError(fmt.Sprintf("Sir, it is currently the %d state. You can't do %s", UciState, message))
+		message.position = &position
+		message.messageType = UciPositionClientMessage
+		return message
+	} else if strings.HasPrefix(textMessage, "go") {
+		message.messageType = UciGoClientMessage
+		return message
+	} else if textMessage == "isready" {
+		message.messageType = UciIsReadyClientMessage
+		return message
+	} else if textMessage == "quit" {
+		message.messageType = UciQuitClientMessage
+		return message
 	}
+
+	// Just return the empty message at this point
+	return message
 }
 
 func UciOk() error {
