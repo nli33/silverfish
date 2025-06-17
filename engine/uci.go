@@ -54,7 +54,7 @@ type UciGoMessage struct {
 
 const (
 	UciEmptyClientMessage uint8 = iota
-	UciPositionClientMessage 
+	UciPositionClientMessage
 	UciUciMessage
 	UciGoClientMessage
 	UciIsReadyClientMessage
@@ -63,9 +63,9 @@ const (
 )
 
 type UciClientMessage struct {
-	position    *Position
-	goMessage   *UciGoMessage
-	messageType uint8
+	Position    *Position
+	GoMessage   *UciGoMessage
+	MessageType uint8
 }
 
 var UciState = UciInitialState
@@ -84,7 +84,7 @@ func (err *UciErrorType) Error() string {
 	return err.err
 }
 
-func UciProcessClientMessage(stdin bufio.Scanner) UciClientMessage {
+func UciProcessClientMessage(stdin *bufio.Scanner) UciClientMessage {
 	message := UciClientMessage{}
 
 	result := stdin.Scan()
@@ -114,17 +114,17 @@ func UciProcessClientMessage(stdin bufio.Scanner) UciClientMessage {
 			}
 		}
 
-		message.position = &position
-		message.messageType = UciPositionClientMessage
+		message.Position = &position
+		message.MessageType = UciPositionClientMessage
 		return message
 	} else if strings.HasPrefix(textMessage, "go") {
-		message.messageType = UciGoClientMessage
+		message.MessageType = UciGoClientMessage
 		return message
 	} else if textMessage == "isready" {
-		message.messageType = UciIsReadyClientMessage
+		message.MessageType = UciIsReadyClientMessage
 		return message
 	} else if textMessage == "quit" {
-		message.messageType = UciQuitClientMessage
+		message.MessageType = UciQuitClientMessage
 		return message
 	}
 
