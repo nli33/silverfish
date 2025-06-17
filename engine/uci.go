@@ -55,7 +55,7 @@ type UciGoMessage struct {
 const (
 	UciEmptyClientMessage uint8 = iota
 	UciPositionClientMessage
-	UciUciMessage
+	UciUciClientMessage
 	UciGoClientMessage
 	UciIsReadyClientMessage
 	UciQuitClientMessage
