@@ -2,45 +2,53 @@ package main
 
 import (
 	"bufio"
-	"fmt"
 	"os"
 	"silverfish/engine"
 )
+
+func HandleMessages(channel chan engine.UciClientMessage) {
+	stdinScanner := bufio.NewScanner(os.Stdin)
+
+	for {
+		message := engine.UciProcessClientMessage(stdinScanner)
+		channel <- message
+
+		quit_message := message.MessageType == engine.UciQuitClientMessage
+		engine_idle := engine.UciState == engine.UciIdleState
+		// Basically, stop listening for more messages after a valid quit message
+		// is received.
+		if quit_message && engine_idle {
+			return
+		}
+	}
+}
 
 func main() {
 	engine.Init()
 	engine.InitBitboard()
 
-	err := engine.UciOk()
-	// This should not happen, ideally, but if it does, something is deeply wrong
-	// with the program.
-	if err != nil {
-		_ = fmt.Errorf("WHAT THE FUCK??")
-		os.Exit(69)
-	}
+	messageChannel := make(chan engine.UciClientMessage, 5)
 
-	position := engine.StartingPosition()
-	should_continue := true
+	go HandleMessages(messageChannel)
 
-	stdinScanner := bufio.NewScanner(os.Stdin)
+	for {
+		message := engine.UciClientMessage{}
+		select {
+		case message = <-messageChannel:
+			break
+		default:
+			continue
+		}
 
-	for should_continue {
-		engine.UciHandleMessages(*stdinScanner, &position, &should_continue)
+		switch message.MessageType {
+		case engine.UciUciClientMessage:
+			engine.UciSetEngineName("Silverfish 0.0.69a")
+			engine.UciSetAuthor("李能和赵梁越")
+			engine.UciSetProtocol(2)
 
-		switch engine.UciState {
-		case engine.UciSyncState:
+			engine.UciOk()
+		case engine.UciIsReadyClientMessage:
 			engine.UciReadyOk()
-			break
-		case engine.UciPingState:
-			engine.UciReadyOk()
-			break
-		case engine.UciHaltState:
-			engine.UciBestMove(position.LegalMoves()[0])
-			break
-		case engine.UciActiveState:
-			fmt.Println("info depth 20 seldepth 10")
-			break
 		}
 	}
-
 }
