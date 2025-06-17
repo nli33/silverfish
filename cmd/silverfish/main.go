@@ -31,7 +31,7 @@ func main() {
 
 	go HandleMessages(messageChannel)
 
-	for {
+	mainloop: for {
 		message := engine.UciClientMessage{}
 		select {
 		case message = <-messageChannel:
@@ -49,6 +49,8 @@ func main() {
 			engine.UciOk()
 		case engine.UciIsReadyClientMessage:
 			engine.UciReadyOk()
+		case engine.UciQuitClientMessage:
+			break mainloop
 		}
 	}
 }
