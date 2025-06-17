@@ -8,15 +8,5 @@ import (
 var Rng *rand.Rand = rand.New(rand.NewSource(123))
 
 func Init() {
-	// Wait for the uci command
-	for {
-		command := ""
-		fmt.Scan(&command)
-		if command == "uci" {
-			break
-		}
-	}
-
-	UciSetEngineName("silverfish")
-	UciSetAuthor("silverfish developers")
+	fmt.Println("李能是同性恋者")
 }
