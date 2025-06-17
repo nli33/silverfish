@@ -132,39 +132,16 @@ func UciProcessClientMessage(stdin *bufio.Scanner) UciClientMessage {
 	return message
 }
 
-func UciOk() error {
-	if UciState != UciInitialState {
-		return NewUciError("This can only be called in the initial state.")
-	}
-
-	UciState = UciIdleState
-	fmt.Print("uciok\n")
-	return nil
+func UciOk() {
+	fmt.Println("uciok")
 }
 
 func UciReadyOk() {
-	switch UciState {
-	case UciSyncState:
-		fmt.Println("readyok")
-		UciState = UciIdleState
-		break
-	case UciPingState:
-		fmt.Println("readyok")
-		UciState = UciActiveState
-		break
-	default:
-		_ = fmt.Errorf("i think this is a bug...")
-	}
+	fmt.Println("readyok")
 }
 
-func UciBestMove(move Move) error {
-	if UciState != UciActiveState && UciState != UciHaltState && UciState != UciPingState {
-		return NewUciError("Cannot call this in states other than Active, Halt, or Ping")
-	}
-
+func UciBestMove(move Move) {
 	fmt.Printf("bestmove %s\n", move.ToString())
-	UciState = UciIdleState
-	return nil
 }
 
 func UciInfo(message string) {
