@@ -53,14 +53,13 @@ mainloop:
 		message := engine.UciClientMessage{}
 		select {
 		case message = <-messageChannel:
-			break
 		default:
 			continue
 		}
 
 		if active {
 			select {
-			case _ = <-actionAlertChannel:
+			case <-actionAlertChannel:
 				active = false
 			default:
 				// Do nothing :ye:

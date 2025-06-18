@@ -97,12 +97,10 @@ func uciProcessGoMessage(message string) UciGoMessage {
 		switch token {
 		case "infinite":
 			result.Infinite = true
-			break
 		case "perft":
 			result.Perft = true
-			break
 		case "depth":
-			depth, err := strconv.Atoi(tokens[i + 1])
+			depth, err := strconv.Atoi(tokens[i+1])
 			if err != nil {
 				UciError("something unknown")
 			}
