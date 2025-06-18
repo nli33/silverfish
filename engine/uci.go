@@ -104,7 +104,7 @@ func uciProcessGoMessage(message string) UciGoMessage {
 		case "depth":
 			depth, err := strconv.Atoi(tokens[i + 1])
 			if err != nil {
-				UciError("WHAT THE FUCK!?")
+				UciError("something unknown")
 			}
 
 			result.Depth = int16(depth)
@@ -119,7 +119,7 @@ func UciProcessClientMessage(stdin *bufio.Scanner) UciClientMessage {
 
 	result := stdin.Scan()
 	if !result {
-		UciError("I/O error or some shit.")
+		UciError("I/O error or something.")
 		return message
 	}
 

@@ -68,7 +68,7 @@ mainloop:
 		} else {
 			switch message.MessageType {
 			case engine.UciUciClientMessage:
-				engine.UciSetEngineName("Silverfish 0.0.69a")
+				engine.UciSetEngineName("Silverfish 0.0.0a")
 				engine.UciSetAuthor("李能和赵梁越")
 				engine.UciSetProtocol(2)
 
