@@ -356,11 +356,12 @@ func (pos *Position) DoMove(move Move) {
 	} else if move.IsPromotion() {
 		pos.Pieces[ourColor][move.Promotion()] |= 1 << move.To()
 	} else {
-		if capturedPiece != NoPiece { // is a capture
-			pos.Pieces[ourColor^1][capturedPiece] &^= 1 << move.To()
-			pos.Rule50 = 0
-		}
 		pos.Pieces[ourColor][movingPiece] |= 1 << move.To()
+	}
+
+	if capturedPiece != NoPiece { // is a capture
+		pos.Pieces[ourColor^1][capturedPiece] &^= 1 << move.To()
+		pos.Rule50 = 0
 	}
 
 	pos.Ply++
