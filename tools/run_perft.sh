@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+make build
+
 ENGINE="./bin/silverfish"
 
 tests=( # fen:depth:ans
