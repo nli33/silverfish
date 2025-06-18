@@ -3,6 +3,7 @@ package engine
 import (
 	"bufio"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -17,12 +18,15 @@ const (
 
 type UciGoMessage struct {
 	// When true, the engine should search infinitely
-	infinite bool
+	Infinite bool
+
+	// When true, the engine should perform perft
+	Perft bool
 
 	// A collection of moves to which the engine should restrict its
 	// consideration (in other words, the move reported with the bestmove
 	// message should be one of the moves in this collection),
-	searchMoves []Move
+	SearchMoves []Move
 
 	// Remember - 0 indicates that it was not specified.
 	// Hopefully this doesn't bite us in the ass
@@ -31,25 +35,25 @@ type UciGoMessage struct {
 	// a mate in this many full moves (or twice this many plies) and may
 	// assume that it does not need to examine lines beyond this many full
 	// moves (or twice this many plies)
-	mate int16
+	Mate int16
 
 	// Time limits (read spec for information. The one we are referencing
 	// has information about this on Page 14.)
-	whiteTime          int16
-	blackTime          int16
-	whiteClockIncrease int16
-	blackClockIncrease int16
-	movesToGo          int16
+	WhiteTime          int16
+	BlackTime          int16
+	WhiteClockIncrease int16
+	BlackClockIncrease int16
+	MovesToGo          int16
 
 	// For traditional α/β engines, the maximum length in ply
 	// of the principal variation (before extensions and reductions have been
 	// applied, and not including plies examined in a quiescing search) that
 	// the engine should explore
-	depth int16
+	Depth int16
 
 	// For traditional engines, the maximum number of positions (counted with
 	// multiplicity) that the engine should examine,
-	nodes int16
+	Nodes int16
 }
 
 const (
@@ -82,6 +86,32 @@ func NewUciError(err string) *UciErrorType {
 
 func (err *UciErrorType) Error() string {
 	return err.err
+}
+
+func uciProcessGoMessage(message string) UciGoMessage {
+	result := UciGoMessage{}
+
+	tokens := strings.Split(message, " ")
+
+	for i, token := range tokens {
+		switch token {
+		case "infinite":
+			result.Infinite = true
+			break
+		case "perft":
+			result.Perft = true
+			break
+		case "depth":
+			depth, err := strconv.Atoi(tokens[i + 1])
+			if err != nil {
+				UciError("WHAT THE FUCK!?")
+			}
+
+			result.Depth = int16(depth)
+		}
+	}
+
+	return result
 }
 
 func UciProcessClientMessage(stdin *bufio.Scanner) UciClientMessage {
@@ -119,6 +149,8 @@ func UciProcessClientMessage(stdin *bufio.Scanner) UciClientMessage {
 		return message
 	} else if strings.HasPrefix(textMessage, "go") {
 		message.MessageType = UciGoClientMessage
+		goMessage := uciProcessGoMessage(strings.TrimPrefix(textMessage, "go "))
+		message.GoMessage = &goMessage
 		return message
 	} else if textMessage == "isready" {
 		message.MessageType = UciIsReadyClientMessage
