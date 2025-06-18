@@ -323,21 +323,21 @@ func (pos *Position) DoMove(move Move) {
 
 	// update castling rights
 	if movingPiece == King {
-		if ourColor == White {
+		if ourColor == White && move.From() == SquareE1 {
 			pos.CastlingRights &^= 0b0011
-		} else if ourColor == Black {
+		} else if ourColor == Black && move.From() == SquareE8 {
 			pos.CastlingRights &^= 0b1100
 		}
 	} else if movingPiece == Rook {
-		switch move.From() {
-		case SquareA1:
-			pos.CastlingRights &^= 0b0010
-		case SquareA8:
-			pos.CastlingRights &^= 0b0001
-		case SquareH1:
-			pos.CastlingRights &^= 0b1000
-		case SquareH8:
-			pos.CastlingRights &^= 0b0100
+		switch {
+		case move.From() == SquareA1 && ourColor == White:
+			pos.CastlingRights &^= WhiteQueenside
+		case move.From() == SquareA8 && ourColor == Black:
+			pos.CastlingRights &^= BlackQueenside
+		case move.From() == SquareH1 && ourColor == White:
+			pos.CastlingRights &^= WhiteKingside
+		case move.From() == SquareH8 && ourColor == Black:
+			pos.CastlingRights &^= BlackKingside
 		}
 	}
 
@@ -494,10 +494,14 @@ func (pos *Position) MoveIsLegal(move Move) bool {
 		return false
 	}
 
-	if move.Type() == CastlingFlag {
-		// movegen will only generate castling moves with castling flags allowing, no need to check again
-		kingStep := KingCastlingDirection(move)
-		for sq := move.From(); sq <= move.To(); sq += Square(kingStep) {
+	// movegen will only generate castling moves with castling flags allowing, no need to check again
+	if move.IsCastling() {
+		kingStep := Square(KingCastlingDirection(move))
+		// check whether our rook is there
+		if pos.Pieces[ourColor][Rook]&(1<<RookSquares[move]) == 0 {
+			return false
+		}
+		for sq := move.From(); sq != move.To()+kingStep; sq += kingStep {
 			if pos.AttackersFrom(sq, oppColor) != 0 {
 				return false
 			}
