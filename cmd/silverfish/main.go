@@ -27,7 +27,7 @@ func executeGoCommand(channel chan bool, position *engine.Position, command *eng
 	// Currently, only Perft is implemented, as that was all that was demanded.
 	if command.Perft && command.Depth != 0 {
 		engine.UciInfo("Perft started.")
-		result := engine.Perft(position, int(command.Depth))
+		result := engine.Perft(position, int(command.Depth), true)
 		engine.UciInfo(fmt.Sprintf("Perft result: %d", result))
 	}
 
