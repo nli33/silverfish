@@ -299,6 +299,16 @@ func TestLegalMoves(t *testing.T) {
 	}
 }
 
+func TestMoveIsLegal(t *testing.T) {
+	// illegal castling (due to bishop attacking a square in path)
+	pos := engine.FromFEN("r3k2r/p1ppqpb1/1n2pnp1/3PN3/1p2P3/2N2Q1p/PPPBbPPP/R3K1R1 w Qkq - 0 2")
+	move := engine.NewMoveCastle(engine.WhiteQueenside)
+
+	if pos.MoveIsLegal(move) {
+		t.Errorf("MoveIsLegal(%s)", move.ToString())
+	}
+}
+
 func TestDoUndo(t *testing.T) {
 	pos := engine.FromFEN("1k6/7P/8/8/n4p2/8/6P1/R3K3 w Q - 4 29")
 
@@ -410,6 +420,28 @@ func TestDoUndo(t *testing.T) {
 	wantPos = engine.FromFEN("1k6/7P/8/8/n4p2/8/6P1/R3K3 w Q - 4 29")
 	if !pos.Equals(wantPos) || wantPos.ToFEN() != pos.ToFEN() {
 		t.Errorf(`UndoMove(%s)`, move.ToString())
+		fmt.Println("Want: " + wantPos.ToFEN())
+		fmt.Println("Got: " + pos.ToFEN())
+	}
+
+	// * New position 1 (Perft debugging)
+	pos = engine.FromFEN("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1R1K b kq - 1 1")
+	move = engine.NewMoveFromStr("b2a1q")
+	wantPos = engine.FromFEN("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/P2P2PP/q2Q1R1K w kq - 0 2")
+	pos.DoMove(move)
+	if !pos.Equals(wantPos) || wantPos.ToFEN() != pos.ToFEN() {
+		t.Errorf(`DoMove(%s)`, move.ToString())
+		fmt.Println("Want: " + wantPos.ToFEN())
+		fmt.Println("Got: " + pos.ToFEN())
+	}
+
+	// * New position 2 (Perft debugging)
+	pos = engine.FromFEN("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1")
+	move = engine.NewMoveFromStr("h1g1")
+	wantPos = engine.FromFEN("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K1R1 b Qkq - 1 1")
+	pos.DoMove(move)
+	if !pos.Equals(wantPos) || wantPos.ToFEN() != pos.ToFEN() {
+		t.Errorf(`DoMove(%s)`, move.ToString())
 		fmt.Println("Want: " + wantPos.ToFEN())
 		fmt.Println("Got: " + pos.ToFEN())
 	}
