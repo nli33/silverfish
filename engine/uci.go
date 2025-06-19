@@ -156,6 +156,9 @@ func UciProcessClientMessage(stdin *bufio.Scanner) UciClientMessage {
 	} else if textMessage == "quit" {
 		message.MessageType = UciQuitClientMessage
 		return message
+	} else if textMessage == "uci" {
+		message.MessageType = UciUciClientMessage
+		return message
 	}
 
 	// Just return the empty message at this point
