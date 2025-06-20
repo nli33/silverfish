@@ -8,12 +8,23 @@ func AlphaBeta(pos Position, depth int) (int32, Move) {
 	alpha := -Infinity // best score of max-player that is guaranteed
 	beta := Infinity   // worst score that minimizing player tolerates
 	bestScore := -Infinity
+	nodes := 0
 	var bestMove Move
 
 	for _, move := range pos.LegalMoves() {
 		pos.DoMove(move)
-		score := -alphaBetaInner(pos, -beta, -alpha, depth-1)
+		nodes += 1
+		score := -alphaBetaInner(pos, -beta, -alpha, depth-1, &nodes)
 		pos.UndoMove(move)
+
+		UciInfo(UciInfoMessage {
+			nodes: nodes,
+			hasNodes: true,
+			currmove: move,
+			hasCurrmove: true,
+			score: bestScore,
+			hasScore: true,
+		})
 
 		if score > bestScore {
 			bestScore = score
@@ -27,7 +38,7 @@ func AlphaBeta(pos Position, depth int) (int32, Move) {
 	return bestScore, bestMove
 }
 
-func alphaBetaInner(pos Position, alpha int32, beta int32, depth int) int32 {
+func alphaBetaInner(pos Position, alpha int32, beta int32, depth int, nodes *int) int32 {
 	if depth == 0 {
 		return Evaluate(&pos)
 	}
@@ -36,8 +47,18 @@ func alphaBetaInner(pos Position, alpha int32, beta int32, depth int) int32 {
 
 	for _, move := range pos.LegalMoves() {
 		pos.DoMove(move)
-		score := -alphaBetaInner(pos, -beta, -alpha, depth-1)
+		*nodes += 1
+		score := -alphaBetaInner(pos, -beta, -alpha, depth-1, nodes)
 		pos.UndoMove(move)
+
+		UciInfo(UciInfoMessage {
+			nodes: *nodes,
+			hasNodes: true,
+			currmove: move,
+			hasCurrmove: true,
+			score: bestScore,
+			hasScore: true,
+		})
 
 		if score >= beta {
 			return score
