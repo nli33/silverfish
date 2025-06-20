@@ -35,7 +35,9 @@ func executeGoCommand(channel chan bool, position *engine.Position, command *eng
 	}
 
 	if command.Infinite {
-		engine.AlphaBeta(*position, int(engine.Infinity))
+		// We set a limited depth to avoid stack overflow (as we are using recursion
+		// to implement the search right now)
+		engine.AlphaBeta(*position, 100)
 	} else {
 		engine.AlphaBeta(*position, int(command.Depth))
 	}
