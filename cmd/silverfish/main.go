@@ -26,9 +26,9 @@ func HandleMessages(channel chan engine.UciClientMessage) {
 func executeGoCommand(channel chan bool, position *engine.Position, command *engine.UciGoMessage) {
 	// Currently, only Perft is implemented, as that was all that was demanded.
 	if command.Perft && command.Depth != 0 {
-		engine.UciInfo("Perft started.")
+		engine.UciLog("Perft started.")
 		result := engine.Perft(position, int(command.Depth), true)
-		engine.UciInfo(fmt.Sprintf("Perft result: %d", result))
+		engine.UciLog(fmt.Sprintf("Perft result: %d", result))
 	}
 
 	// Tell the main thread that we're done.

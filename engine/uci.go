@@ -177,7 +177,7 @@ func UciBestMove(move Move) {
 	fmt.Printf("bestmove %s\n", move.ToString())
 }
 
-func UciInfo(message string) {
+func UciLog(message string) {
 	fmt.Printf("info string %s\n", message)
 }
 
