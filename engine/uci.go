@@ -56,6 +56,21 @@ type UciGoMessage struct {
 	Nodes int16
 }
 
+// I'm too lazy to copy and paste documentation for every single 
+// field, so just read the information on Page 9 and you should be up to speed
+type UciInfoMessage struct {
+	nodes int
+	hasNodes bool
+	currmove Move
+	hasCurrmove bool
+	currmovenumber int
+	hasCurrMoveNumber bool
+	score float64
+	hasScore bool
+	isMate bool
+	hasIsMate bool
+}
+
 const (
 	UciEmptyClientMessage uint8 = iota
 	UciPositionClientMessage
