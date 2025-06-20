@@ -17,13 +17,13 @@ func AlphaBeta(pos Position, depth int) (int32, Move) {
 		score := -alphaBetaInner(pos, -beta, -alpha, depth-1, &nodes)
 		pos.UndoMove(move)
 
-		UciInfo(UciInfoMessage {
-			nodes: nodes,
-			hasNodes: true,
-			currmove: move,
+		UciInfo(UciInfoMessage{
+			nodes:       nodes,
+			hasNodes:    true,
+			currmove:    move,
 			hasCurrmove: true,
-			score: bestScore,
-			hasScore: true,
+			score:       bestScore,
+			hasScore:    true,
 		})
 
 		if score > bestScore {
@@ -50,6 +50,17 @@ func alphaBetaInner(pos Position, alpha int32, beta int32, depth int, nodes *int
 		*nodes += 1
 		score := -alphaBetaInner(pos, -beta, -alpha, depth-1, nodes)
 		pos.UndoMove(move)
+
+		if depth%7 == 0 {
+			UciInfo(UciInfoMessage{
+				nodes:       *nodes,
+				hasNodes:    true,
+				currmove:    move,
+				hasCurrmove: true,
+				score:       bestScore,
+				hasScore:    true,
+			})
+		}
 
 		if score >= beta {
 			return score
