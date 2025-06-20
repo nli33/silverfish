@@ -34,20 +34,19 @@ func executeGoCommand(channel chan bool, position *engine.Position, command *eng
 		return
 	}
 
-	bestMove := engine.NewMove(0, 0)
+	var bestMove engine.Move
 
 	if command.Infinite {
 		// We set a limited depth to avoid stack overflow (as we are using recursion
 		// to implement the search right now)
-		_, bestMove = engine.AlphaBeta(*position, 100)
+		_, bestMove = engine.AlphaBeta(position, 100)
 	} else {
-		_, bestMove = engine.AlphaBeta(*position, int(command.Depth))
+		_, bestMove = engine.AlphaBeta(position, int(command.Depth))
 	}
 
 	engine.UciBestMove(bestMove)
 
 	channel <- true
-	return
 }
 
 func main() {
