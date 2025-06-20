@@ -68,7 +68,6 @@ type UciInfoMessage struct {
 	score float64
 	hasScore bool
 	isMate bool
-	hasIsMate bool
 }
 
 const (
@@ -190,6 +189,32 @@ func UciReadyOk() {
 
 func UciBestMove(move Move) {
 	fmt.Printf("bestmove %s\n", move.ToString())
+}
+
+func UciInfo(info UciInfoMessage) {
+	message := "info "
+
+	if info.hasNodes {
+		message += fmt.Sprintf("nodes %d", info.nodes)
+	}
+
+	if info.hasCurrmove {
+		message += fmt.Sprintf("currmove %s", info.currmove.ToString())
+	}
+
+	if info.hasCurrMoveNumber {
+		message += fmt.Sprintf("currmovenumber %d", info.currmovenumber)
+	}
+
+	if info.hasScore && !info.isMate {
+		message += fmt.Sprintf("score cp %f", info.score)
+	}
+
+	if info.hasScore && info.isMate {
+		message += fmt.Sprintf("score mate %f", info.score)
+	}
+
+	fmt.Println(message)
 }
 
 func UciLog(message string) {
