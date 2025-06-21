@@ -245,36 +245,6 @@ func FromFEN(fen string) Position {
 	return pos
 }
 
-// returns position after move, regardless of legality or pseudo-legality
-// copies the current board (doesn't modify original)
-// keeping for now, since it might be a bit faster than DoMove ? (no state saving needed, no undo needed)
-func (pos Position) After(move Move) Position {
-	ourColor, piece := pos.GetSquare(move.From())
-	oppColor := ourColor ^ 1
-	pos.Pieces[ourColor][piece] &^= 1 << move.From()
-	if move.Type() == CastlingFlag {
-		rookFromSquare := RookSquares[move]
-		pos.Pieces[ourColor][Rook] &^= 1 << rookFromSquare
-		rookToSquare := Square(int(move.To()) - KingCastlingDirection(move))
-		pos.Pieces[ourColor][Rook] |= 1 << rookToSquare
-		pos.Pieces[ourColor][King] |= 1 << move.To()
-	} else if move.Type() == EnPassantFlag {
-		capturedPawnSq := Square(int(move.To()) - PawnDisplacement(ourColor))
-		pos.Pieces[oppColor][Pawn] &^= 1 << capturedPawnSq
-		pos.Pieces[ourColor][piece] |= 1 << move.To()
-	} else if move.Type() == PromotionFlag {
-		pos.Pieces[ourColor][move.Promotion()] |= 1 << move.To()
-	} else {
-		for c := White; c <= Black; c++ {
-			for p := Pawn; p <= King; p++ {
-				pos.Pieces[c][p] &^= 1 << move.To()
-			}
-		}
-		pos.Pieces[ourColor][piece] |= 1 << move.To()
-	}
-	return pos
-}
-
 func (pos *Position) DoMove(move Move) {
 	ourColor, movingPiece := pos.GetSquare(move.From())
 	if ourColor != pos.Turn {
@@ -498,10 +468,12 @@ func (pos *Position) MoveIsLegal(move Move) bool {
 	}
 
 	// check if the move leaves us in check (inefficient method)
-	after := pos.After(move)
-	if after.Checkers(ourColor) != 0 {
+	pos.DoMove(move)
+	if pos.Checkers(ourColor) != 0 {
+		pos.UndoMove(move)
 		return false
 	}
+	pos.UndoMove(move)
 
 	// not sure if this is necessary
 	/* if !after.IsLegal() {
