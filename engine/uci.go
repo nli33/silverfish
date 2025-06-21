@@ -56,18 +56,18 @@ type UciGoMessage struct {
 	Nodes int16
 }
 
-// I'm too lazy to copy and paste documentation for every single 
+// I'm too lazy to copy and paste documentation for every single
 // field, so just read the information on Page 9 and you should be up to speed
 type UciInfoMessage struct {
-	nodes int
-	hasNodes bool
-	currmove Move
-	hasCurrmove bool
-	currmovenumber int
+	nodes             int
+	hasNodes          bool
+	currmove          Move
+	hasCurrmove       bool
+	currmovenumber    int
 	hasCurrMoveNumber bool
-	score int32
-	hasScore bool
-	isMate bool
+	score             int32
+	hasScore          bool
+	isMate            bool
 }
 
 const (
