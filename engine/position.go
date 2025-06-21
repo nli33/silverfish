@@ -54,14 +54,7 @@ const (
 )
 
 func StartingPosition() Position {
-	p := Position{
-		Turn:           White,
-		Pieces:         Default,
-		CastlingRights: 0b00001111,
-		Rule50:         0,
-		Ply:            0,
-	}
-	return p
+	return FromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 }
 
 func (pos *Position) Equals(otherPos Position) bool {
