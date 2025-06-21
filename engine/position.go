@@ -60,6 +60,43 @@ func StartingPosition() Position {
 	return FromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 }
 
+func (pos *Position) PutPiece(sq Square, piece uint8, color uint8) {
+	sqBB := Bitboard(1 << sq)
+	pos.Pieces[color][piece] |= sqBB
+	if color == Black {
+		piece += 10
+	}
+	pos.Board[sq] = piece
+	pos.Blockers |= sqBB
+}
+
+func (pos *Position) PutPiecesBB(pieces [2][6]Bitboard) {
+	for sq := SquareA1; sq <= SquareH8; sq++ {
+		pos.RemovePiece(sq)
+		for piece := Pawn; piece <= King; piece++ {
+			for color := White; color <= Black; color++ {
+				if pieces[color][piece]&(1<<sq) != 0 {
+					pos.PutPiece(sq, piece, color)
+				}
+			}
+		}
+	}
+}
+
+func (pos *Position) RemovePiece(sq Square) {
+	piece := pos.Board[sq]
+	color := ColorOf(piece)
+	if color == Black {
+		piece -= 10
+	}
+	sqBB := Bitboard(1 << sq)
+	pos.Board[sq] = NoPiece
+	pos.Blockers &^= sqBB
+	if color != NoColor {
+		pos.Pieces[color][piece] &^= sqBB
+	}
+}
+
 func (pos *Position) Equals(otherPos Position) bool {
 	return pos.Turn == otherPos.Turn &&
 		pos.Pieces == otherPos.Pieces &&
@@ -69,17 +106,18 @@ func (pos *Position) Equals(otherPos Position) bool {
 		pos.EnPassantSquare == otherPos.EnPassantSquare
 }
 
-func (pos *Position) GetSquare(square Square) (uint8, uint8) {
-	var color, piece uint8
-	var mask Bitboard = Bitboard(1 << square)
-	for color = 0; color <= 1; color++ {
-		for piece = 0; piece <= 5; piece++ {
-			if pos.Pieces[color][piece]&mask != 0 {
-				return color, piece
-			}
-		}
+// (color, piece)
+func (pos *Position) GetSquare(sq Square) (uint8, uint8) {
+	p := pos.Board[sq]
+	if p == NoPiece {
+		return NoColor, NoPiece
 	}
-	return NoColor, NoPiece
+
+	if pos.Board[sq] >= 10 {
+		return Black, p - 10
+	} else {
+		return White, p
+	}
 }
 
 func (pos *Position) FullMoves() uint16 {
@@ -179,7 +217,13 @@ func FromFEN(fen string) Position {
 			rank--
 			file = FileA
 		} else if char >= '1' && char <= '8' {
-			file += uint8(char - '0')
+			spaces := uint8(char - '0')
+			sq := NewSquare(rank, file)
+			for i := uint8(0); i < spaces; i++ {
+				pos.RemovePiece(sq)
+				sq++
+			}
+			file += spaces
 		} else {
 			var color uint8
 			if char >= 'A' && char <= 'Z' {
@@ -196,7 +240,7 @@ func FromFEN(fen string) Position {
 			}
 
 			sq := NewSquare(rank, file)
-			pos.Pieces[color][piece] |= 1 << sq
+			pos.PutPiece(sq, piece, color)
 			file++
 		}
 	}
@@ -249,12 +293,15 @@ func FromFEN(fen string) Position {
 }
 
 func (pos *Position) DoMove(move Move) {
-	ourColor, movingPiece := pos.GetSquare(move.From())
+	from := move.From()
+	to := move.To()
+
+	ourColor, movingPiece := pos.GetSquare(from)
 	if ourColor != pos.Turn {
 		panic("not our turn")
 	}
 	// don't use opp color from here, since en passants will yield NoColor
-	_, capturedPiece := pos.GetSquare(move.To())
+	_, capturedPiece := pos.GetSquare(to)
 
 	// save the current state before moving
 	// CapturedPiece will not include pawns captured en passant
@@ -270,10 +317,10 @@ func (pos *Position) DoMove(move Move) {
 
 	// update en passant square
 	if movingPiece == Pawn {
-		dist := int(move.To()) - int(move.From())
+		dist := int(to) - int(from)
 		pawnDisplacement := PawnDisplacement(ourColor)
 		if dist == 2*pawnDisplacement {
-			pos.EnPassantSquare = Square(int(move.To()) - pawnDisplacement)
+			pos.EnPassantSquare = Square(int(to) - pawnDisplacement)
 		} else {
 			pos.EnPassantSquare = NoSquare
 		}
@@ -284,45 +331,47 @@ func (pos *Position) DoMove(move Move) {
 
 	// update castling rights
 	if movingPiece == King {
-		if ourColor == White && move.From() == SquareE1 {
+		if ourColor == White && from == SquareE1 {
 			pos.CastlingRights &^= 0b0011
-		} else if ourColor == Black && move.From() == SquareE8 {
+		} else if ourColor == Black && from == SquareE8 {
 			pos.CastlingRights &^= 0b1100
 		}
 	} else if movingPiece == Rook {
 		switch {
-		case move.From() == SquareA1 && ourColor == White:
+		case from == SquareA1 && ourColor == White:
 			pos.CastlingRights &^= WhiteQueenside
-		case move.From() == SquareA8 && ourColor == Black:
+		case from == SquareA8 && ourColor == Black:
 			pos.CastlingRights &^= BlackQueenside
-		case move.From() == SquareH1 && ourColor == White:
+		case from == SquareH1 && ourColor == White:
 			pos.CastlingRights &^= WhiteKingside
-		case move.From() == SquareH8 && ourColor == Black:
+		case from == SquareH8 && ourColor == Black:
 			pos.CastlingRights &^= BlackKingside
 		}
 	}
 
-	pos.Pieces[ourColor][movingPiece] &^= 1 << move.From()
+	pos.RemovePiece(from)
 
 	if move.IsCastling() {
 		rookFromSquare := RookSquares[move]
-		pos.Pieces[ourColor][Rook] &^= 1 << rookFromSquare
-		rookToSquare := Square(int(move.To()) - KingCastlingDirection(move))
-		pos.Pieces[ourColor][Rook] |= 1 << rookToSquare
-		pos.Pieces[ourColor][King] |= 1 << move.To()
+		pos.RemovePiece(rookFromSquare)
+		rookToSquare := Square(int(to) - KingCastlingDirection(move))
+		pos.PutPiece(rookToSquare, Rook, ourColor)
+		pos.PutPiece(to, King, ourColor)
 	} else if move.IsEnPassant() {
-		capturedPawnSq := Square(int(move.To()) - PawnDisplacement(ourColor))
-		pos.Pieces[ourColor^1][Pawn] &^= 1 << capturedPawnSq
-		pos.Pieces[ourColor][movingPiece] |= 1 << move.To()
+		capturedPawnSq := Square(int(to) - PawnDisplacement(ourColor))
+		pos.RemovePiece(capturedPawnSq)
+		pos.PutPiece(to, movingPiece, ourColor)
 	} else if move.IsPromotion() {
-		pos.Pieces[ourColor][move.Promotion()] |= 1 << move.To()
+		if capturedPiece != NoPiece { // is a capture
+			pos.RemovePiece(to)
+		}
+		pos.PutPiece(to, move.Promotion(), ourColor)
 	} else {
-		pos.Pieces[ourColor][movingPiece] |= 1 << move.To()
-	}
-
-	if capturedPiece != NoPiece { // is a capture
-		pos.Pieces[ourColor^1][capturedPiece] &^= 1 << move.To()
-		pos.Rule50 = 0
+		if capturedPiece != NoPiece { // is a capture
+			pos.RemovePiece(to)
+			pos.Rule50 = 0
+		}
+		pos.PutPiece(to, movingPiece, ourColor)
 	}
 
 	pos.Ply++
@@ -331,6 +380,9 @@ func (pos *Position) DoMove(move Move) {
 }
 
 func (pos *Position) UndoMove(move Move) {
+	from := move.From()
+	to := move.To()
+
 	n := len(pos.History)
 	if n == 0 {
 		panic("no reversible moves")
@@ -347,26 +399,26 @@ func (pos *Position) UndoMove(move Move) {
 	pos.Rule50 = lastState.Rule50
 
 	// put moved piece back to origin square
-	pos.Pieces[pos.Turn][lastState.MovedPiece] |= 1 << move.From()
+	pos.PutPiece(from, lastState.MovedPiece, pos.Turn)
 
 	if move.IsEnPassant() {
-		capturedPawnSq := Square(int(move.To()) - PawnDisplacement(pos.Turn))
-		pos.Pieces[pos.Turn][lastState.MovedPiece] &^= 1 << move.To() // remove capturer
-		pos.Pieces[pos.Turn^1][Pawn] |= 1 << capturedPawnSq           // put captured pawn back
+		capturedPawnSq := Square(int(to) - PawnDisplacement(pos.Turn))
+		pos.RemovePiece(to)                            // remove capturer
+		pos.PutPiece(capturedPawnSq, Pawn, pos.Turn^1) // put captured pawn back
 	} else if move.IsCastling() {
 		rookFromSquare := RookSquares[move]
-		rookToSquare := Square(int(move.To()) - KingCastlingDirection(move))
-		pos.Pieces[pos.Turn][Rook] &^= 1 << rookToSquare  // remove rook
-		pos.Pieces[pos.Turn][Rook] |= 1 << rookFromSquare // place rook
-		pos.Pieces[pos.Turn][King] &^= 1 << move.To()     // remove king
+		rookToSquare := Square(int(to) - KingCastlingDirection(move))
+		pos.RemovePiece(rookToSquare)                // remove rook
+		pos.PutPiece(rookFromSquare, Rook, pos.Turn) // place rook
+		pos.RemovePiece(to)                          // remove king
 	} else if move.IsPromotion() {
-		pos.Pieces[pos.Turn][move.Promotion()] &^= 1 << move.To() // remove promoted piece
+		pos.RemovePiece(to) // remove promoted piece
 	} else { // quiet move
-		pos.Pieces[pos.Turn][lastState.MovedPiece] &^= 1 << move.To() // remove piece
+		pos.RemovePiece(to) // remove piece
 	}
 
 	if lastState.CapturedPiece != NoPiece { // capture
-		pos.Pieces[pos.Turn^1][lastState.CapturedPiece] |= 1 << move.To() // put piece back
+		pos.PutPiece(to, lastState.CapturedPiece, pos.Turn^1) // put piece back
 	}
 }
 
@@ -441,7 +493,10 @@ func (pos *Position) IsLegal() bool {
 }
 
 func (pos *Position) MoveIsLegal(move Move) bool {
-	ourColor, _ := pos.GetSquare(move.From())
+	from := move.From()
+	to := move.To()
+
+	ourColor, _ := pos.GetSquare(from)
 	oppColor := ourColor ^ 1
 
 	// check if it is our turn
@@ -449,7 +504,7 @@ func (pos *Position) MoveIsLegal(move Move) bool {
 		return false
 	}
 
-	destColor, _ := pos.GetSquare(move.To())
+	destColor, _ := pos.GetSquare(to)
 
 	// check if move tries to capture same color piece
 	if destColor == ourColor {
@@ -460,10 +515,11 @@ func (pos *Position) MoveIsLegal(move Move) bool {
 	if move.IsCastling() {
 		kingStep := Square(KingCastlingDirection(move))
 		// check whether our rook is there
+		//if pos.Board[RookSquares[move]] !=
 		if pos.Pieces[ourColor][Rook]&(1<<RookSquares[move]) == 0 {
 			return false
 		}
-		for sq := move.From(); sq != move.To()+kingStep; sq += kingStep {
+		for sq := from; sq != to+kingStep; sq += kingStep {
 			if pos.AttackersFrom(sq, oppColor) != 0 {
 				return false
 			}
@@ -478,17 +534,12 @@ func (pos *Position) MoveIsLegal(move Move) bool {
 	}
 	pos.UndoMove(move)
 
-	// not sure if this is necessary
-	/* if !after.IsLegal() {
-		return false
-	} */
-
 	return true
 }
 
 func (pos *Position) LegalMoves() []Move {
 	var moveList []Move
-	for _, move := range GenMoves(*pos) {
+	for _, move := range GenMoves(pos) {
 		if pos.MoveIsLegal(move) {
 			moveList = append(moveList, move)
 		}

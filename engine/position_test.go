@@ -76,13 +76,13 @@ func TestFEN(t *testing.T) {
 		},
 	}
 	pos = engine.Position{
-		Pieces:          pieces,
 		Turn:            engine.White,
 		CastlingRights:  0b0010,
 		Rule50:          4,
 		Ply:             56,
 		EnPassantSquare: engine.NoSquare,
 	}
+	pos.PutPiecesBB(pieces)
 
 	wantFEN = "1k6/7P/8/8/n4p2/8/6P1/R3K3 w Q - 4 29"
 	gotFEN = pos.ToFEN()

@@ -110,6 +110,7 @@ const (
 	NoColor
 )
 
+// for Position.Board, +10 for black pieces
 const (
 	Pawn uint8 = iota
 	Knight
@@ -189,6 +190,16 @@ func RankOf(square Square) uint8 {
 // columns
 func FileOf(square Square) uint8 {
 	return uint8(square & 7)
+}
+
+func ColorOf(piece uint8) uint8 {
+	switch {
+	case piece == NoPiece:
+		return NoColor
+	case piece >= 10:
+		return Black
+	}
+	return White
 }
 
 func NewSquare(rank uint8, file uint8) Square {
