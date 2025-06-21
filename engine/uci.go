@@ -140,7 +140,7 @@ func UciProcessClientMessage(stdin *bufio.Scanner) UciClientMessage {
 	if strings.HasPrefix(textMessage, "position") {
 		parts := strings.Split(strings.TrimPrefix(textMessage, "position "), "moves")
 		initial := strings.TrimSpace(parts[0])
-		position := NewPosition()
+		var position Position
 
 		if strings.HasPrefix(initial, "fen ") {
 			position = FromFEN(strings.TrimPrefix(initial, "fen "))

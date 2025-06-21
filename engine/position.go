@@ -53,11 +53,6 @@ const (
 	BlackQueenside
 )
 
-func NewPosition() Position {
-	p := Position{}
-	return p
-}
-
 func StartingPosition() Position {
 	p := Position{
 		Turn:           White,
