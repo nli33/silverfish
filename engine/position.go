@@ -11,8 +11,11 @@ import (
 
 type Position struct {
 	// Turn: 0=white 1=black
-	Turn   uint8
-	Pieces [2][6]Bitboard
+	Turn uint8
+
+	Board    [64]uint8
+	Pieces   [2][6]Bitboard
+	Blockers Bitboard
 
 	// Castling Rights:
 	// 0 - can white castle kingside?
@@ -493,20 +496,15 @@ func (pos *Position) LegalMoves() []Move {
 	return moveList
 }
 
-func (pos *Position) Blockers() Bitboard {
-	return Merge(append(pos.Pieces[0][:], pos.Pieces[1][:]...))
-}
-
 // checking for attackers:
 // just check the 8 knight squares, diagonals, and horizontal/vertical
 
 // return bitboard of a specific side's pieces that attack a square
 func (pos *Position) AttackersFrom(sq Square, color uint8) Bitboard {
 	var attackers Bitboard
-	blockers := pos.Blockers()
 
-	orthogonal := GetRookMoves(sq, blockers)
-	diagonal := GetBishopMoves(sq, blockers)
+	orthogonal := GetRookMoves(sq, pos.Blockers)
+	diagonal := GetBishopMoves(sq, pos.Blockers)
 	knightMoves := GetKnightMoves(sq)
 	kingMoves := GetKingMoves(sq)
 	pawnCaptures := PawnCaptures[color^1][sq]

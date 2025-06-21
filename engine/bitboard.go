@@ -195,14 +195,6 @@ func PopLsb(bb *Bitboard) Square {
 	return lsb
 }
 
-func Merge(bbs []Bitboard) Bitboard {
-	result := Bitboard(0)
-	for _, bb := range bbs {
-		result |= bb
-	}
-	return result
-}
-
 func InitBitboard() {
 	// pre-generate magic bitboards and move sets
 	for sq := SquareA1; sq <= SquareH8; sq++ {

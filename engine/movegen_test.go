@@ -203,10 +203,9 @@ func TestKingMoves(t *testing.T) {
 
 func TestPawnMoves(t *testing.T) {
 	pos := engine.FromFEN("3bk3/p1P1P3/6p1/7P/2p1pN2/3P2N1/1P3PPp/8 w - - 0 1")
-	blockers := pos.Blockers()
 
 	pos.Turn = engine.White
-	gotMoves := engine.GetPawnMoves(pos, blockers)
+	gotMoves := engine.GetPawnMoves(&pos)
 	wantMoves := []engine.Move{
 		engine.NewMoveFromStr("b2b3"),
 		engine.NewMoveFromStr("b2b4"),
@@ -246,7 +245,7 @@ func TestPawnMoves(t *testing.T) {
 	}
 
 	pos.Turn = engine.Black
-	gotMoves = engine.GetPawnMoves(pos, blockers)
+	gotMoves = engine.GetPawnMoves(&pos)
 	wantMoves = []engine.Move{
 		engine.NewMoveFromStr("a7a6"),
 		engine.NewMoveFromStr("a7a5"),
@@ -278,11 +277,10 @@ func TestPawnMoves(t *testing.T) {
 
 func TestEnPassant(t *testing.T) {
 	pos := engine.FromFEN("8/8/8/6pP/1Pp5/8/8/8 w - - 0 1")
-	blockers := pos.Blockers()
 
 	pos.Turn = engine.Black
 	pos.EnPassantSquare = engine.SquareB3
-	gotMoves := engine.GetPawnMoves(pos, blockers)
+	gotMoves := engine.GetPawnMoves(&pos)
 	wantMoves := []engine.Move{
 		engine.NewMoveFromStr("c4b3") | engine.EnPassantFlag,
 		engine.NewMoveFromStr("c4c3"),
@@ -303,7 +301,7 @@ func TestEnPassant(t *testing.T) {
 
 	pos.Turn = engine.White
 	pos.EnPassantSquare = engine.SquareG6
-	gotMoves = engine.GetPawnMoves(pos, blockers)
+	gotMoves = engine.GetPawnMoves(&pos)
 	wantMoves = []engine.Move{
 		engine.NewMoveFromStr("b4b5"),
 		engine.NewMoveFromStr("h5h6"),
@@ -325,10 +323,9 @@ func TestEnPassant(t *testing.T) {
 
 func TestCastlingMoves(t *testing.T) {
 	pos := engine.FromFEN("rn1qk2r/8/8/8/8/8/8/R3KB1R w KQkq - 0 1")
-	blockers := pos.Blockers()
 
 	pos.Turn = engine.White
-	gotMoves := engine.GetCastlingMoves(pos, blockers)
+	gotMoves := engine.GetCastlingMoves(&pos)
 	wantMoves := []engine.Move{
 		engine.NewMoveCastle(engine.WhiteQueenside),
 	}
@@ -347,7 +344,7 @@ func TestCastlingMoves(t *testing.T) {
 
 	// No castling rights on white queenside
 	pos.CastlingRights = 0b1101
-	gotMoves = engine.GetCastlingMoves(pos, blockers)
+	gotMoves = engine.GetCastlingMoves(&pos)
 	wantMoves = []engine.Move{}
 	if !equalSets(gotMoves, wantMoves) {
 		t.Errorf(`TestCastlingMoves(%d)`, pos.Turn)
@@ -363,7 +360,7 @@ func TestCastlingMoves(t *testing.T) {
 	}
 
 	pos.Turn = engine.Black
-	gotMoves = engine.GetCastlingMoves(pos, blockers)
+	gotMoves = engine.GetCastlingMoves(&pos)
 	wantMoves = []engine.Move{
 		engine.NewMoveCastle(engine.BlackKingside),
 	}
