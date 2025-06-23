@@ -49,7 +49,13 @@ type UciGoMessage struct {
 	// of the principal variation (before extensions and reductions have been
 	// applied, and not including plies examined in a quiescing search) that
 	// the engine should explore
-	Depth int16
+	Depth    int16
+	Movetime int32
+
+	WTime int32
+	BTime int32
+	WInc  int32
+	BInc  int32
 
 	// For traditional engines, the maximum number of positions (counted with
 	// multiplicity) that the engine should examine,
@@ -118,9 +124,39 @@ func uciProcessGoMessage(message string) UciGoMessage {
 			if err != nil {
 				UciError("something unknown")
 			}
-
 			result.Depth = int16(depth)
+		case "movetime":
+			movetime, err := strconv.Atoi(tokens[i+1])
+			if err != nil {
+				UciError("something unknown")
+			}
+			result.Movetime = int32(movetime)
+		case "wtime":
+			wtime, err := strconv.Atoi(tokens[i+1])
+			if err != nil {
+				UciError("something unknown")
+			}
+			result.WTime = int32(wtime)
+		case "btime":
+			btime, err := strconv.Atoi(tokens[i+1])
+			if err != nil {
+				UciError("something unknown")
+			}
+			result.BTime = int32(btime)
+		case "winc":
+			winc, err := strconv.Atoi(tokens[i+1])
+			if err != nil {
+				UciError("something unknown")
+			}
+			result.WInc = int32(winc)
+		case "binc":
+			binc, err := strconv.Atoi(tokens[i+1])
+			if err != nil {
+				UciError("something unknown")
+			}
+			result.BInc = int32(binc)
 		}
+
 	}
 
 	return result

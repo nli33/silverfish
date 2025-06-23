@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"silverfish/engine"
+	"time"
 )
 
 func HandleMessages(channel chan engine.UciClientMessage) {
@@ -39,9 +40,13 @@ func executeGoCommand(channel chan bool, position *engine.Position, command *eng
 	if command.Infinite {
 		// We set a limited depth to avoid stack overflow (as we are using recursion
 		// to implement the search right now)
-		_, bestMove = engine.AlphaBeta(position, 100)
+		_, bestMove = engine.Search(position, engine.InfiniteDepth, engine.InfiniteMovetime)
+	} else if command.Movetime != 0 {
+		_, bestMove = engine.Search(position, engine.InfiniteDepth, time.Duration(command.Movetime))
+	} else if command.Depth != 0 {
+		_, bestMove = engine.Search(position, int(command.Depth), engine.InfiniteMovetime)
 	} else {
-		_, bestMove = engine.AlphaBeta(position, int(command.Depth))
+		_, bestMove = engine.Search(position, engine.InfiniteDepth, engine.TimeLimit(position, command))
 	}
 
 	engine.UciBestMove(bestMove)
