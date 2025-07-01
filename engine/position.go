@@ -539,7 +539,9 @@ func (pos *Position) MoveIsLegal(move Move) bool {
 
 func (pos *Position) LegalMoves() []Move {
 	var moveList []Move
-	for _, move := range GenMoves(pos) {
+	moves := GenMoves(pos)
+	for i := 0; i < int(moves.Count); i++ {
+		move := moves.Moves[i]
 		if pos.MoveIsLegal(move) {
 			moveList = append(moveList, move)
 		}

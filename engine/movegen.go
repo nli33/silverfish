@@ -1,7 +1,17 @@
 package engine
 
-func GenMoves(pos *Position) []Move {
-	var moveList []Move
+type MoveList struct {
+	Moves [256]Move
+	Count uint8
+}
+
+func (moveList *MoveList) Add(move Move) {
+	moveList.Moves[moveList.Count] = move
+	moveList.Count++
+}
+
+func GenMoves(pos *Position) MoveList {
+	var moves MoveList
 
 	us := pos.Turn // our color
 
@@ -12,20 +22,18 @@ func GenMoves(pos *Position) []Move {
 			movesBB := GetPieceMoves(piece, from, pos.Blockers, us)
 			for movesBB != 0 {
 				to := PopLsb(&movesBB)
-				moveList = append(moveList, NewMove(from, to))
+				moves.Add(NewMove(from, to))
 			}
 		}
 	}
 
-	moveList = append(moveList, GetPawnMoves(pos)...)
-	moveList = append(moveList, GetCastlingMoves(pos)...)
+	GenPawnMoves(pos, &moves)
+	GenCastlingMoves(pos, &moves)
 
-	return moveList
+	return moves
 }
 
-func GetPawnMoves(pos *Position) []Move {
-	var moveList []Move
-
+func GenPawnMoves(pos *Position, moves *MoveList) {
 	us := pos.Turn
 	ourPawnsBB := pos.Pieces[us][0]
 
@@ -42,13 +50,13 @@ func GetPawnMoves(pos *Position) []Move {
 			toSq := PopLsb(&capturesBB)
 			if pos.Blockers&(1<<toSq) != 0 {
 				if rank == PawnPromotionRank(us) { // promotion
-					AddPromotions(&moveList, fromSq, toSq)
+					AddPromotions(moves, fromSq, toSq)
 				} else { // normal capture
-					moveList = append(moveList, NewMove(fromSq, toSq))
+					moves.Add(NewMove(fromSq, toSq))
 				}
 			} else if pos.EnPassantSquare == toSq && pos.Blockers&(1<<pos.EnPassantSquare) == 0 {
 				// en passant
-				moveList = append(moveList, NewMove(fromSq, pos.EnPassantSquare)|EnPassantFlag)
+				moves.Add(NewMove(fromSq, pos.EnPassantSquare) | EnPassantFlag)
 			}
 		}
 
@@ -58,9 +66,9 @@ func GetPawnMoves(pos *Position) []Move {
 			continue
 		}
 		if rank == PawnPromotionRank(us) { // promotion
-			AddPromotions(&moveList, fromSq, Square(nextSq))
+			AddPromotions(moves, fromSq, Square(nextSq))
 		} else { // normal move 1 square forward
-			moveList = append(moveList, NewMove(fromSq, Square(nextSq)))
+			moves.Add(NewMove(fromSq, Square(nextSq)))
 		}
 
 		// moving forward 2 squares
@@ -69,19 +77,15 @@ func GetPawnMoves(pos *Position) []Move {
 			if pos.Blockers&(1<<nextSq) != 0 {
 				continue
 			}
-			moveList = append(moveList, NewMove(fromSq, Square(nextSq)))
+			moves.Add(NewMove(fromSq, Square(nextSq)))
 		}
 	}
-
-	return moveList
 }
 
-// add a pawn move to a move list
-// if a promotion is possible, add promotion moves instead
-func AddPromotions(moveList *[]Move, fromSq Square, toSq Square) {
-	//if RankOf(toSq) == PawnPromotionRank(color) {
+// add all piece promotion moves
+func AddPromotions(moves *MoveList, fromSq Square, toSq Square) {
 	for piece := Knight; piece <= Queen; piece++ {
-		*moveList = append(*moveList, NewPromotionMove(fromSq, toSq, piece))
+		moves.Add(NewPromotionMove(fromSq, toSq, piece))
 	}
 }
 
@@ -117,26 +121,22 @@ func GetKnightMoves(square Square) Bitboard {
 	return KnightMoves[square]
 }
 
-func GetCastlingMoves(pos *Position) []Move {
-	var moveList []Move
-
+func GenCastlingMoves(pos *Position, moves *MoveList) {
 	if pos.Turn == White && pos.CanWhiteCastleKingside(pos.Blockers) {
-		moveList = append(moveList, NewMoveCastle(WhiteKingside))
+		moves.Add(NewMoveCastle(WhiteKingside))
 	}
 
 	if pos.Turn == Black && pos.CanBlackCastleKingside(pos.Blockers) {
-		moveList = append(moveList, NewMoveCastle(BlackKingside))
+		moves.Add(NewMoveCastle(BlackKingside))
 	}
 
 	if pos.Turn == White && pos.CanWhiteCastleQueenside(pos.Blockers) {
-		moveList = append(moveList, NewMoveCastle(WhiteQueenside))
+		moves.Add(NewMoveCastle(WhiteQueenside))
 	}
 
 	if pos.Turn == Black && pos.CanBlackCastleQueenside(pos.Blockers) {
-		moveList = append(moveList, NewMoveCastle(BlackQueenside))
+		moves.Add(NewMoveCastle(BlackQueenside))
 	}
-
-	return moveList
 }
 
 func GetKingMoves(square Square) Bitboard {
