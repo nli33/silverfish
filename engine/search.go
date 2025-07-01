@@ -38,9 +38,9 @@ func Search(pos *Position, maxDepth int, timeLimit time.Duration) (int32, Move) 
 	var bestMove Move
 	var bestScore int32
 
-	moves := pos.LegalMoves()
+	moveList := GenMoves(pos, BB_Full)
 
-	lastScores := make(map[Move]int32, len(moves))
+	// lastScores := make(map[Move]int32, len(moves))
 
 	nodes := 0
 
@@ -59,13 +59,18 @@ func Search(pos *Position, maxDepth int, timeLimit time.Duration) (int32, Move) 
 		beta := Infinity
 		bestScore = -Infinity
 
-		for _, move := range moves {
+		for i := uint8(0); i < moveList.Count; i++ {
+			move := moveList.Moves[i]
+			if !pos.MoveIsLegal(move) {
+				continue
+			}
+
 			nodes++
 			pos.DoMove(move)
 			score := -alphaBetaInner(pos, -beta, -alpha, depth-1, &nodes, &ctx)
 			pos.UndoMove(move)
 
-			lastScores[move] = score
+			// lastScores[move] = score
 
 			if score > bestScore {
 				bestScore = score
@@ -90,9 +95,9 @@ func Search(pos *Position, maxDepth int, timeLimit time.Duration) (int32, Move) 
 }
 
 func alphaBetaInner(pos *Position, alpha, beta int32, depth int, nodes *int, ctx *context.Context) int32 {
-	moves := pos.LegalMoves()
+	moveList := GenMoves(pos, BB_Full)
 
-	if len(moves) == 0 {
+	if moveList.Count == 0 {
 		if pos.Checkers(pos.Turn) != 0 {
 			// checkmate
 			return -Infinity
@@ -107,11 +112,16 @@ func alphaBetaInner(pos *Position, alpha, beta int32, depth int, nodes *int, ctx
 	}
 
 	bestScore := -Infinity
-	for _, move := range moves {
+	for i := uint8(0); i < moveList.Count; i++ {
 		select {
 		case <-(*ctx).Done():
 			return bestScore
 		default:
+		}
+
+		move := moveList.Moves[i]
+		if !pos.MoveIsLegal(move) {
+			continue
 		}
 
 		*nodes++

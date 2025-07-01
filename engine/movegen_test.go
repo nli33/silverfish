@@ -206,7 +206,7 @@ func TestPawnMoves(t *testing.T) {
 
 	moveList := engine.MoveList{}
 	pos.Turn = engine.White
-	engine.GenPawnMoves(&pos, &moveList)
+	engine.GenPawnMoves(&pos, &moveList, engine.BB_Full)
 	gotMoves := moveList.Moves[:moveList.Count]
 	wantMoves := []engine.Move{
 		engine.NewMoveFromStr("b2b3"),
@@ -248,7 +248,7 @@ func TestPawnMoves(t *testing.T) {
 
 	moveList = engine.MoveList{}
 	pos.Turn = engine.Black
-	engine.GenPawnMoves(&pos, &moveList)
+	engine.GenPawnMoves(&pos, &moveList, engine.BB_Full)
 	gotMoves = moveList.Moves[:moveList.Count]
 	wantMoves = []engine.Move{
 		engine.NewMoveFromStr("a7a6"),
@@ -285,7 +285,7 @@ func TestEnPassant(t *testing.T) {
 	moveList := engine.MoveList{}
 	pos.Turn = engine.Black
 	pos.EnPassantSquare = engine.SquareB3
-	engine.GenPawnMoves(&pos, &moveList)
+	engine.GenPawnMoves(&pos, &moveList, engine.BB_Full)
 	gotMoves := moveList.Moves[:moveList.Count]
 	wantMoves := []engine.Move{
 		engine.NewMoveFromStr("c4b3") | engine.EnPassantFlag,
@@ -308,7 +308,7 @@ func TestEnPassant(t *testing.T) {
 	moveList = engine.MoveList{}
 	pos.Turn = engine.White
 	pos.EnPassantSquare = engine.SquareG6
-	engine.GenPawnMoves(&pos, &moveList)
+	engine.GenPawnMoves(&pos, &moveList, engine.BB_Full)
 	gotMoves = moveList.Moves[:moveList.Count]
 	wantMoves = []engine.Move{
 		engine.NewMoveFromStr("b4b5"),

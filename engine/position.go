@@ -15,6 +15,7 @@ type Position struct {
 
 	Board    [64]uint8
 	Pieces   [2][6]Bitboard
+	Sides    [2]Bitboard
 	Blockers Bitboard
 
 	// Castling Rights:
@@ -68,6 +69,7 @@ func (pos *Position) PutPiece(sq Square, piece uint8, color uint8) {
 	}
 	pos.Board[sq] = piece
 	pos.Blockers |= sqBB
+	pos.Sides[color] |= sqBB
 }
 
 func (pos *Position) PutPiecesBB(pieces [2][6]Bitboard) {
@@ -92,6 +94,7 @@ func (pos *Position) RemovePiece(sq Square) {
 	sqBB := Bitboard(1 << sq)
 	pos.Board[sq] = NoPiece
 	pos.Blockers &^= sqBB
+	pos.Sides[color] &^= sqBB
 	if color != NoColor {
 		pos.Pieces[color][piece] &^= sqBB
 	}
@@ -537,16 +540,17 @@ func (pos *Position) MoveIsLegal(move Move) bool {
 	return true
 }
 
+// deprecated, only used for testing purposes now
 func (pos *Position) LegalMoves() []Move {
-	var moveList []Move
-	moves := GenMoves(pos)
-	for i := 0; i < int(moves.Count); i++ {
-		move := moves.Moves[i]
+	var moves []Move
+	moveList := GenMoves(pos, BB_Full)
+	for i := 0; i < int(moveList.Count); i++ {
+		move := moveList.Moves[i]
 		if pos.MoveIsLegal(move) {
-			moveList = append(moveList, move)
+			moves = append(moves, move)
 		}
 	}
-	return moveList
+	return moves
 }
 
 // checking for attackers:

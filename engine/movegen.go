@@ -10,7 +10,8 @@ func (moveList *MoveList) Add(move Move) {
 	moveList.Count++
 }
 
-func GenMoves(pos *Position) MoveList {
+// generate a MoveList. only include moves with dest squares in mask bitboard
+func GenMoves(pos *Position, mask Bitboard) MoveList {
 	var moves MoveList
 
 	us := pos.Turn // our color
@@ -19,7 +20,7 @@ func GenMoves(pos *Position) MoveList {
 		pieceBB := pos.Pieces[us][piece]
 		for pieceBB != 0 {
 			from := PopLsb(&pieceBB)
-			movesBB := GetPieceMoves(piece, from, pos.Blockers, us)
+			movesBB := GetPieceMoves(piece, from, pos.Blockers, us) & mask
 			for movesBB != 0 {
 				to := PopLsb(&movesBB)
 				moves.Add(NewMove(from, to))
@@ -27,13 +28,15 @@ func GenMoves(pos *Position) MoveList {
 		}
 	}
 
-	GenPawnMoves(pos, &moves)
-	GenCastlingMoves(pos, &moves)
+	GenPawnMoves(pos, &moves, mask)
+	if mask == BB_Full { // maybe bad idea?
+		GenCastlingMoves(pos, &moves)
+	}
 
 	return moves
 }
 
-func GenPawnMoves(pos *Position, moves *MoveList) {
+func GenPawnMoves(pos *Position, moves *MoveList, mask Bitboard) {
 	us := pos.Turn
 	ourPawnsBB := pos.Pieces[us][0]
 
@@ -45,7 +48,7 @@ func GenPawnMoves(pos *Position, moves *MoveList) {
 		rank := RankOf(fromSq)
 
 		// captures + en passant
-		capturesBB := PawnCaptures[us][fromSq]
+		capturesBB := PawnCaptures[us][fromSq] & mask
 		for capturesBB != 0 {
 			toSq := PopLsb(&capturesBB)
 			if pos.Blockers&(1<<toSq) != 0 {
@@ -62,7 +65,8 @@ func GenPawnMoves(pos *Position, moves *MoveList) {
 
 		// moving forward
 		nextSq := int(fromSq) + nextRank
-		if pos.Blockers&(1<<nextSq) != 0 {
+		nextSqBB := Bitboard(1 << nextSq)
+		if pos.Blockers&nextSqBB != 0 || mask&nextSqBB == 0 {
 			continue
 		}
 		if rank == PawnPromotionRank(us) { // promotion
@@ -74,7 +78,8 @@ func GenPawnMoves(pos *Position, moves *MoveList) {
 		// moving forward 2 squares
 		if rank == pawnStartingRank {
 			nextSq += nextRank
-			if pos.Blockers&(1<<nextSq) != 0 {
+			nextSqBB := Bitboard(1 << nextSq)
+			if pos.Blockers&nextSqBB != 0 || mask&nextSqBB == 0 {
 				continue
 			}
 			moves.Add(NewMove(fromSq, Square(nextSq)))
