@@ -2,11 +2,15 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"os"
+	"runtime/pprof"
 	"silverfish/engine"
 	"time"
 )
+
+var shouldProfile *bool = flag.Bool("profile", false, "Enable profiling. Outputs results to cpu.prof")
 
 func HandleMessages(channel chan engine.UciClientMessage) {
 	stdinScanner := bufio.NewScanner(os.Stdin)
@@ -55,6 +59,26 @@ func executeGoCommand(channel chan bool, position *engine.Position, command *eng
 }
 
 func main() {
+	flag.Parse()
+
+	if *shouldProfile {
+		engine.UciLog("Started profiling")
+		profFile, err := os.Create("cpu.prof")
+		if err != nil {
+			fmt.Printf("error: failed to create profiling file: %v\n", err)
+			os.Exit(1)
+		}
+		defer profFile.Close()
+
+		err = pprof.StartCPUProfile(profFile)
+		if err != nil {
+			fmt.Printf("error: failed to start profiling, %v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	defer pprof.StopCPUProfile()
+
 	engine.Init()
 	engine.InitBitboard()
 
