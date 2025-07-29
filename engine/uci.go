@@ -65,6 +65,8 @@ type UciGoMessage struct {
 // I'm too lazy to copy and paste documentation for every single
 // field, so just read the information on Page 9 and you should be up to speed
 type UciInfoMessage struct {
+	depth             int
+	hasDepth          bool
 	nodes             int
 	hasNodes          bool
 	currmove          Move
@@ -235,6 +237,10 @@ func UciInfo(info UciInfoMessage) {
 
 	if info.hasNodes {
 		message += fmt.Sprintf(" nodes %d", info.nodes)
+	}
+
+	if info.hasDepth {
+		message += fmt.Sprintf(" depth %d", info.depth)
 	}
 
 	if info.hasCurrmove {

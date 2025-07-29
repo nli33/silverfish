@@ -81,6 +81,8 @@ func Search(pos *Position, maxDepth int, timeLimit time.Duration) (int32, Move) 
 			}
 
 			UciInfo(UciInfoMessage{
+				depth:       depth,
+				hasDepth:    true,
 				currmove:    move,
 				hasCurrmove: true,
 				score:       bestScore,
@@ -139,8 +141,10 @@ func alphaBetaInner(pos *Position, alpha, beta int32, depth int, nodes *int, ctx
 			alpha = score
 		}
 
-		if depth%7 == 0 {
+		if *nodes&32767 == 0 {
 			UciInfo(UciInfoMessage{
+				depth:       depth,
+				hasDepth:    true,
 				nodes:       *nodes,
 				hasNodes:    true,
 				currmove:    move,
