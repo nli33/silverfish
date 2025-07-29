@@ -334,6 +334,13 @@ func (pos *Position) DoMove(move Move) {
 
 	// update castling rights
 	if movingPiece == King {
+		// NOTE: the only purpose of this, is to recognize moves as castling moves when `position startpos moves ...` is used
+		// this makes it about 5% slower for now, remove and change NewMoveFromStr instead if this is a big problem
+		dist := Distance(to, from)
+		if dist == 2 || dist == 3 {
+			move |= CastlingFlag
+		}
+
 		if ourColor == White && from == SquareE1 {
 			pos.CastlingRights &^= 0b0011
 		} else if ourColor == Black && from == SquareE8 {
