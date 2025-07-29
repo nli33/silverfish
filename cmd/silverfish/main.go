@@ -46,11 +46,11 @@ func executeGoCommand(channel chan bool, position *engine.Position, command *eng
 		// to implement the search right now)
 		_, bestMove = engine.Search(position, engine.InfiniteDepth, engine.InfiniteMovetime)
 	} else if command.Movetime != 0 {
-		_, bestMove = engine.Search(position, engine.InfiniteDepth, time.Duration(command.Movetime))
+		_, bestMove = engine.Search(position, engine.InfiniteDepth, time.Duration(command.Movetime)*time.Millisecond)
 	} else if command.Depth != 0 {
 		_, bestMove = engine.Search(position, int(command.Depth), engine.InfiniteMovetime)
 	} else {
-		_, bestMove = engine.Search(position, engine.InfiniteDepth, engine.TimeLimit(position, command))
+		_, bestMove = engine.Search(position, engine.InfiniteDepth, engine.TimeLimit(position, command)*time.Millisecond)
 	}
 
 	engine.UciBestMove(bestMove)
