@@ -1,13 +1,13 @@
 package engine
 
 import (
-	"context"
 	"time"
 )
 
-const InfiniteDepth = 100000
-const InfiniteMovetime = 600000 * time.Millisecond
-const MaxMovetime = 3000 * time.Millisecond
+const InfiniteDepth = 100000                       // arbitrary large number for infinite depth
+const InfiniteMovetime = 600000 * time.Millisecond // arbitrary large number for infinite movetime
+const MaxMovetime = 3000 * time.Millisecond        // max movetime for any move if unspecified
+const MaxQuiescenceDepth = 5
 
 func TimeLimit(pos *Position, command *UciGoMessage) time.Duration {
 	var ourTime, ourInc int32 //, theirTime, theirInc int32
@@ -32,11 +32,10 @@ func TimeLimit(pos *Position, command *UciGoMessage) time.Duration {
 
 // pass timeLimit in nanoseconds (default)
 func Search(pos *Position, maxDepth int, timeLimit time.Duration) (int32, Move) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeLimit*time.Millisecond)
-	defer cancel()
+	startTime := time.Now()
 
 	var bestMove Move
-	var bestScore int32
+	bestScore := -Infinity
 
 	moveList := GenMoves(pos, BB_Full)
 
@@ -45,19 +44,15 @@ func Search(pos *Position, maxDepth int, timeLimit time.Duration) (int32, Move) 
 	nodes := 0
 
 	for depth := 1; depth <= maxDepth; depth++ {
-		select {
-		case <-ctx.Done():
-			return bestScore, bestMove
-		default:
-		}
-
 		// sort.Slice(moves, func(i, j int) bool {
 		// 	return lastScores[moves[i]] > lastScores[moves[j]]
 		// })
 
 		alpha := -Infinity
 		beta := Infinity
-		bestScore = -Infinity
+
+		bestScoreCurr := -Infinity
+		var bestMoveCurr Move
 
 		for i := uint8(0); i < moveList.Count; i++ {
 			move := moveList.Moves[i]
@@ -65,16 +60,19 @@ func Search(pos *Position, maxDepth int, timeLimit time.Duration) (int32, Move) 
 				continue
 			}
 
-			nodes++
 			pos.DoMove(move)
-			score := -alphaBetaInner(pos, -beta, -alpha, depth-1, &nodes, &ctx)
+			score := -alphaBetaInner(pos, -beta, -alpha, depth-1, &nodes, &startTime, &timeLimit)
 			pos.UndoMove(move)
+
+			if time.Since(startTime) > timeLimit {
+				break
+			}
 
 			// lastScores[move] = score
 
-			if score > bestScore {
-				bestScore = score
-				bestMove = move
+			if score > bestScoreCurr {
+				bestScoreCurr = score
+				bestMoveCurr = move
 			}
 			if score > alpha {
 				alpha = score
@@ -91,12 +89,66 @@ func Search(pos *Position, maxDepth int, timeLimit time.Duration) (int32, Move) 
 				hasNodes:    true,
 			})
 		}
+
+		if time.Since(startTime) > timeLimit {
+			break
+		}
+
+		// NOTE: this may lead to choosing a move that is higher eval at lower depth but is actually worse
+		// 	than a move that is slightly lower (but more accurate) eval at higher depth
+		if bestScoreCurr > bestScore {
+			bestScore = bestScoreCurr
+			bestMove = bestMoveCurr
+		}
 	}
 
 	return bestScore, bestMove
 }
 
-func alphaBetaInner(pos *Position, alpha, beta int32, depth int, nodes *int, ctx *context.Context) int32 {
+func Quiescence(pos *Position, alpha, beta int32, nodes *int, startTime *time.Time, timeLimit *time.Duration, qdepth int) int32 {
+	if qdepth > MaxQuiescenceDepth {
+		return Evaluate(pos)
+	}
+
+	standPat := Evaluate(pos)
+	if standPat >= beta {
+		return beta
+	}
+	if standPat > alpha {
+		alpha = standPat
+	}
+
+	var moveList MoveList
+	if pos.Checkers(pos.Turn) != 0 {
+		moveList = GenMoves(pos, BB_Full)
+	} else {
+		moveList = GenMoves(pos, pos.Sides[pos.Turn^1]) // only captures
+	}
+
+	for i := uint8(0); i < moveList.Count; i++ {
+		move := moveList.Moves[i]
+		if !pos.MoveIsLegal(move) {
+			continue
+		}
+
+		*nodes++
+
+		pos.DoMove(move)
+		score := -Quiescence(pos, -beta, -alpha, nodes, startTime, timeLimit, qdepth+1)
+		pos.UndoMove(move)
+
+		if score >= beta {
+			return beta
+		}
+		if score > alpha {
+			alpha = score
+		}
+	}
+
+	return alpha
+}
+
+func alphaBetaInner(pos *Position, alpha, beta int32, depth int, nodes *int, startTime *time.Time, timeLimit *time.Duration) int32 {
 	moveList := GenMoves(pos, BB_Full)
 
 	if moveList.Count == 0 {
@@ -110,25 +162,21 @@ func alphaBetaInner(pos *Position, alpha, beta int32, depth int, nodes *int, ctx
 	}
 
 	if depth == 0 {
-		return Evaluate(pos)
+		// return Evaluate(pos)
+		return Quiescence(pos, alpha, beta, nodes, startTime, timeLimit, 0)
 	}
 
 	bestScore := -Infinity
 	for i := uint8(0); i < moveList.Count; i++ {
-		select {
-		case <-(*ctx).Done():
-			return bestScore
-		default:
-		}
-
 		move := moveList.Moves[i]
 		if !pos.MoveIsLegal(move) {
 			continue
 		}
 
 		*nodes++
+
 		pos.DoMove(move)
-		score := -alphaBetaInner(pos, -beta, -alpha, depth-1, nodes, ctx)
+		score := -alphaBetaInner(pos, -beta, -alpha, depth-1, nodes, startTime, timeLimit)
 		pos.UndoMove(move)
 
 		if score >= beta {

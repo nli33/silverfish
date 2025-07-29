@@ -22,5 +22,5 @@ func (pos *Position) Material(color uint8) int32 {
 }
 
 func Evaluate(pos *Position) int32 {
-	return pos.Material(White) - pos.Material(Black)
+	return pos.Material(pos.Turn) - pos.Material(pos.Turn^1)
 }
