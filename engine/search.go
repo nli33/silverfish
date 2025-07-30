@@ -22,7 +22,7 @@ func TimeLimit(pos *Position, command *UciGoMessage) time.Duration {
 		// theirTime = command.WTime
 		// theirInc = command.WInc
 	}
-	estimatedMovesLeft := 50 - pos.FullMoves()
+	estimatedMovesLeft := max(10, 60-pos.FullMoves())
 	return min(MaxMovetime, time.Duration(ourTime/int32(estimatedMovesLeft)+ourInc/4))
 }
 
@@ -79,14 +79,12 @@ func Search(pos *Position, maxDepth int, timeLimit time.Duration) (int32, Move) 
 			}
 
 			UciInfo(UciInfoMessage{
-				depth:       depth,
-				hasDepth:    true,
-				currmove:    move,
-				hasCurrmove: true,
-				score:       bestScore,
-				hasScore:    true,
-				nodes:       nodes,
-				hasNodes:    true,
+				depth:    depth,
+				hasDepth: true,
+				score:    bestScore,
+				hasScore: true,
+				nodes:    nodes,
+				hasNodes: true,
 			})
 		}
 
@@ -191,14 +189,12 @@ func alphaBetaInner(pos *Position, alpha, beta int32, depth int, nodes *int, sta
 
 		if *nodes&32767 == 0 {
 			UciInfo(UciInfoMessage{
-				depth:       depth,
-				hasDepth:    true,
-				nodes:       *nodes,
-				hasNodes:    true,
-				currmove:    move,
-				hasCurrmove: true,
-				score:       bestScore,
-				hasScore:    true,
+				depth:    depth,
+				hasDepth: true,
+				nodes:    *nodes,
+				hasNodes: true,
+				score:    bestScore,
+				hasScore: true,
 			})
 		}
 	}
