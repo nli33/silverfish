@@ -190,7 +190,20 @@ func UciProcessClientMessage(stdin *bufio.Scanner) UciClientMessage {
 			moves := strings.Split(strings.TrimSpace(parts[1]), " ")
 
 			for _, move := range moves {
-				position.DoMove(NewMoveFromStr(move))
+				givenMove := NewMoveFromStr(move)
+				isLegal := false
+
+				// choose the Move from the list of legal moves, to ensure any required flags are set
+				for _, legalMove := range position.LegalMoves() {
+					if legalMove.To() == givenMove.To() && legalMove.From() == givenMove.From() && legalMove.Promotion() == givenMove.Promotion() {
+						position.DoMove(legalMove)
+						isLegal = true
+					}
+				}
+
+				if !isLegal {
+					break
+				}
 			}
 		}
 
