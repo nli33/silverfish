@@ -3,7 +3,14 @@
 
 ![Logo](https://raw.githubusercontent.com/carpetmaker3162/silverfish/refs/heads/master/logo.svg)
 
-Chess Engine (work-in-progress)
+UCI Chess Engine (work-in-progress)
+
+## Features
+
+- Hybrid bitboard & mailbox board representation
+- Negamax search with alpha-beta pruning
+- Quiescence search
+- Evaluation using material counting + piece-square tables
 
 ## Quickstart
 
