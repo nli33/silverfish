@@ -6,9 +6,10 @@ import (
 
 const InfiniteDepth = 100000                       // arbitrary large number for infinite depth
 const InfiniteMovetime = 600000 * time.Millisecond // arbitrary large number for infinite movetime
-const MaxMovetime = 3000 * time.Millisecond        // max movetime for any move if unspecified
+const MaxMovetime = 2000                           // max movetime for any move if unspecified
 const MaxQuiescenceDepth = 5
 
+// return number in milliseconds
 func TimeLimit(pos *Position, command *UciGoMessage) time.Duration {
 	var ourTime, ourInc int32 //, theirTime, theirInc int32
 	if pos.Turn == White {
@@ -22,7 +23,8 @@ func TimeLimit(pos *Position, command *UciGoMessage) time.Duration {
 		// theirTime = command.WTime
 		// theirInc = command.WInc
 	}
-	estimatedMovesLeft := max(10, 60-pos.FullMoves())
+	estimatedMovesLeft := max(10, 100-pos.FullMoves())
+	// multiplying time.Miillisecond twice?
 	return min(MaxMovetime, time.Duration(ourTime/int32(estimatedMovesLeft)+ourInc/4))
 }
 
