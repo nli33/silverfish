@@ -7,7 +7,7 @@ import (
 const InfiniteDepth = 100000                       // arbitrary large number for infinite depth
 const InfiniteMovetime = 600000 * time.Millisecond // arbitrary large number for infinite movetime
 const MaxMovetime = 2000                           // max movetime for any move if unspecified
-const MaxQuiescenceDepth = 5
+const MaxQuiescenceDepth = 8
 
 // return number in milliseconds
 func TimeLimit(pos *Position, command *UciGoMessage) time.Duration {
@@ -41,14 +41,9 @@ func Search(pos *Position, maxDepth int, timeLimit time.Duration) (int32, Move) 
 
 	moveList := GenMoves(pos, BB_Full)
 
-	// lastScores := make(map[Move]int32, len(moves))
-
 	nodes := 0
 
 	for depth := 1; depth <= maxDepth; depth++ {
-		// sort.Slice(moves, func(i, j int) bool {
-		// 	return lastScores[moves[i]] > lastScores[moves[j]]
-		// })
 
 		alpha := -Infinity
 		beta := Infinity
@@ -70,9 +65,8 @@ func Search(pos *Position, maxDepth int, timeLimit time.Duration) (int32, Move) 
 				break
 			}
 
-			// lastScores[move] = score
-
-			if score > bestScoreCurr {
+			// ensure a null move is not chosen (in case of unavoidable checkmate)
+			if score > bestScoreCurr || bestMoveCurr == Move(0) {
 				bestScoreCurr = score
 				bestMoveCurr = move
 			}
@@ -94,12 +88,8 @@ func Search(pos *Position, maxDepth int, timeLimit time.Duration) (int32, Move) 
 			break
 		}
 
-		// NOTE: this may lead to choosing a move that is higher eval at lower depth but is actually worse
-		// 	than a move that is slightly lower (but more accurate) eval at higher depth
-		if bestScoreCurr > bestScore {
-			bestScore = bestScoreCurr
-			bestMove = bestMoveCurr
-		}
+		bestScore = bestScoreCurr
+		bestMove = bestMoveCurr
 	}
 
 	return bestScore, bestMove
