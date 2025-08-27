@@ -8,7 +8,9 @@ UCI Chess Engine (work-in-progress)
 ## Features
 
 - Hybrid bitboard & mailbox board representation
+- Magic bitboard move generation
 - Negamax search with alpha-beta pruning
+- Iterative deepening
 - Quiescence search
 - Evaluation using material counting + piece-square tables
 
