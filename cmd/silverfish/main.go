@@ -80,7 +80,6 @@ func main() {
 	defer pprof.StopCPUProfile()
 
 	engine.Init()
-	engine.InitBitboard()
 
 	messageChannel := make(chan engine.UciClientMessage, 5)
 	// Used for reporting if an action is done.
