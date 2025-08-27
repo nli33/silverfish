@@ -394,4 +394,5 @@ func TestCastlingMoves(t *testing.T) {
 
 func init() {
 	engine.InitBitboard()
+	engine.InitZobrist()
 }

@@ -40,6 +40,9 @@ type Position struct {
 
 	// past states
 	History []State
+
+	// zobrist hash
+	Hash uint64
 }
 
 type State struct {
@@ -48,6 +51,7 @@ type State struct {
 	Rule50          uint8
 	CapturedPiece   uint8
 	MovedPiece      uint8
+	Hash            uint64
 }
 
 const (
@@ -61,7 +65,7 @@ func StartingPosition() Position {
 	return FromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 }
 
-func (pos *Position) PutPiece(sq Square, piece uint8, color uint8) {
+func (pos *Position) PutPiece(sq Square, piece uint8, color uint8) uint8 {
 	sqBB := Bitboard(1 << sq)
 	pos.Pieces[color][piece] |= sqBB
 	if color == Black {
@@ -70,6 +74,9 @@ func (pos *Position) PutPiece(sq Square, piece uint8, color uint8) {
 	pos.Board[sq] = piece
 	pos.Blockers |= sqBB
 	pos.Sides[color] |= sqBB
+
+	// return piece adjusted for color
+	return piece
 }
 
 func (pos *Position) PutPiecesBB(pieces [2][6]Bitboard) {
@@ -98,6 +105,17 @@ func (pos *Position) RemovePiece(sq Square) {
 	if color != NoColor {
 		pos.Pieces[color][piece] &^= sqBB
 	}
+}
+
+func (pos *Position) ZobristPutPiece(sq Square, piece uint8, color uint8) {
+	piece = pos.PutPiece(sq, piece, color)
+	pos.Hash ^= GetPieceSqKey(sq, piece)
+}
+
+func (pos *Position) ZobristRemovePiece(sq Square) {
+	piece := pos.Board[sq]
+	pos.RemovePiece(sq)
+	pos.Hash ^= GetPieceSqKey(sq, piece)
 }
 
 func (pos *Position) Equals(otherPos Position) bool {
@@ -292,6 +310,8 @@ func FromFEN(fen string) Position {
 	}
 	pos.Ply = uint16((fullmove-1)*2 + int(pos.Turn))
 
+	pos.Hash = Hash(&pos)
+
 	return pos
 }
 
@@ -314,25 +334,27 @@ func (pos *Position) DoMove(move Move) {
 		CastlingRights:  pos.CastlingRights,
 		Rule50:          pos.Rule50,
 		EnPassantSquare: pos.EnPassantSquare,
+		Hash:            pos.Hash,
 	}
 
 	pos.Rule50++
 
 	// update en passant square
+	// remove current EP square from hash, then re-add new. same with castling rights
+	pos.Hash ^= GetEPKey(pos.EnPassantSquare)
+	pos.EnPassantSquare = NoSquare
 	if movingPiece == Pawn {
 		dist := int(to) - int(from)
 		pawnDisplacement := PawnDisplacement(ourColor)
 		if dist == 2*pawnDisplacement {
 			pos.EnPassantSquare = Square(int(to) - pawnDisplacement)
-		} else {
-			pos.EnPassantSquare = NoSquare
 		}
 		pos.Rule50 = 0
-	} else {
-		pos.EnPassantSquare = NoSquare
 	}
+	pos.Hash ^= GetEPKey(pos.EnPassantSquare)
 
 	// update castling rights
+	pos.Hash ^= CastleKeys[pos.CastlingRights]
 	if movingPiece == King {
 		if ourColor == White && from == SquareE1 {
 			pos.CastlingRights &^= 0b0011
@@ -351,34 +373,38 @@ func (pos *Position) DoMove(move Move) {
 			pos.CastlingRights &^= BlackKingside
 		}
 	}
+	pos.Hash ^= CastleKeys[pos.CastlingRights]
 
-	pos.RemovePiece(from)
+	pos.ZobristRemovePiece(from)
 
 	if move.IsCastling() {
 		rookFromSquare := RookSquares[move]
-		pos.RemovePiece(rookFromSquare)
+		pos.ZobristRemovePiece(rookFromSquare)
 		rookToSquare := Square(int(to) - KingCastlingDirection(move))
-		pos.PutPiece(rookToSquare, Rook, ourColor)
-		pos.PutPiece(to, King, ourColor)
+		pos.ZobristPutPiece(rookToSquare, Rook, ourColor)
+		pos.ZobristPutPiece(to, King, ourColor)
 	} else if move.IsEnPassant() {
 		capturedPawnSq := Square(int(to) - PawnDisplacement(ourColor))
-		pos.RemovePiece(capturedPawnSq)
-		pos.PutPiece(to, movingPiece, ourColor)
+		pos.ZobristRemovePiece(capturedPawnSq)
+		pos.ZobristPutPiece(to, movingPiece, ourColor)
 	} else if move.IsPromotion() {
 		if capturedPiece != NoPiece { // is a capture
-			pos.RemovePiece(to)
+			pos.ZobristRemovePiece(to)
 		}
-		pos.PutPiece(to, move.Promotion(), ourColor)
+		pos.ZobristPutPiece(to, move.Promotion(), ourColor)
 	} else {
 		if capturedPiece != NoPiece { // is a capture
-			pos.RemovePiece(to)
+			pos.ZobristRemovePiece(to)
 			pos.Rule50 = 0
 		}
-		pos.PutPiece(to, movingPiece, ourColor)
+		pos.ZobristPutPiece(to, movingPiece, ourColor)
 	}
 
 	pos.Ply++
+
 	pos.Turn ^= 1
+	pos.Hash ^= TurnKey
+
 	pos.History = append(pos.History, state)
 }
 
@@ -400,6 +426,7 @@ func (pos *Position) UndoMove(move Move) {
 	pos.CastlingRights = lastState.CastlingRights
 	pos.EnPassantSquare = lastState.EnPassantSquare
 	pos.Rule50 = lastState.Rule50
+	pos.Hash = lastState.Hash
 
 	// put moved piece back to origin square
 	pos.PutPiece(from, lastState.MovedPiece, pos.Turn)
