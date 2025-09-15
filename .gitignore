@@ -4,6 +4,8 @@ cmp.py
 perft1
 perft2
 cpu.prof
+*.pgn
+*.epd
 
 # fastchess
 config.json 
