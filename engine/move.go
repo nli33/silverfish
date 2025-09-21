@@ -5,8 +5,9 @@ package engine
 6-11: to square
 12-13: promotion piece (knight, bishop, rook, queen)
 14-15: castling (01), en passant (10), promotion (11)
+16+: move score
 */
-type Move uint16
+type Move uint32
 
 const (
 	NoneFlag = iota << 14
@@ -77,6 +78,15 @@ func (m Move) IsEnPassant() bool {
 
 func (m Move) Type() int {
 	return int(m & PromotionFlag)
+}
+
+func (m Move) Score() int {
+	return int(m&0xffff0000) >> 16
+}
+
+func (m *Move) GiveScore(score int) {
+	*m &= 0xffff
+	*m |= Move(score << 16)
 }
 
 func (m Move) ToString() string {

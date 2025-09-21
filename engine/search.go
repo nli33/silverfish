@@ -28,6 +28,47 @@ func TimeLimit(pos *Position, command *UciGoMessage) time.Duration {
 	return min(MaxMovetime, time.Duration(ourTime/int32(estimatedMovesLeft)+ourInc/4))
 }
 
+var MvvLva = [7][7]int{
+	{0, 0, 0, 0, 0, 0, 0},       // victim K, attacker K, Q, R, B, N, P, None
+	{50, 51, 52, 53, 54, 55, 0}, // victim Q, attacker K, Q, R, B, N, P, None
+	{40, 41, 42, 43, 44, 45, 0}, // victim R, attacker K, Q, R, B, N, P, None
+	{30, 31, 32, 33, 34, 35, 0}, // victim B, attacker K, Q, R, B, N, P, None
+	{20, 21, 22, 23, 24, 25, 0}, // victim N, attacker K, Q, R, B, N, P, None
+	{10, 11, 12, 13, 14, 15, 0}, // victim P, attacker K, Q, R, B, N, P, None
+	{0, 0, 0, 0, 0, 0, 0},       // victim None, attacker K, Q, R, B, N, P, None
+}
+
+func ScoreMoves(pos *Position, moveList *MoveList) {
+	for i := 0; i < int(moveList.Count); i++ {
+		move := &moveList.Moves[i]
+		_, victim := pos.GetSquare(move.From())
+		_, attacker := pos.GetSquare(move.To())
+		value := MvvLva[victim][attacker]
+		move.GiveScore(value)
+	}
+}
+
+// swap the highest score move to the front, leaving everything else untouched
+func OrderMoves(pos *Position, moveList *MoveList) {
+	if moveList.Count <= 1 {
+		return
+	}
+
+	bestIdx := 0
+	bestScore := moveList.Moves[0].Score()
+
+	for j := 1; j < int(moveList.Count); j++ {
+		if moveList.Moves[j].Score() > bestScore {
+			bestIdx = j
+			bestScore = moveList.Moves[j].Score()
+		}
+	}
+
+	if bestIdx != 0 {
+		moveList.Moves[0], moveList.Moves[bestIdx] = moveList.Moves[bestIdx], moveList.Moves[0]
+	}
+}
+
 // based on negamax (flip sign), each player maximizes their own score
 // alpha: best score guaranteed for max-player. can prune branches that give less than this
 // beta: upper limit that min-player will tolerate. min-player will prune lines exceeding this
@@ -40,11 +81,9 @@ func Search(pos *Position, maxDepth int, timeLimit time.Duration) (int32, Move) 
 	bestScore := -Infinity
 
 	moveList := GenMoves(pos, BB_Full)
-
 	nodes := 0
 
 	for depth := 1; depth <= maxDepth; depth++ {
-
 		alpha := -Infinity
 		beta := Infinity
 
@@ -115,6 +154,9 @@ func Quiescence(pos *Position, alpha, beta int32, nodes *int, startTime *time.Ti
 		moveList = GenMoves(pos, pos.Sides[pos.Turn^1]) // only captures
 	}
 
+	ScoreMoves(pos, &moveList)
+	OrderMoves(pos, &moveList)
+
 	for i := uint8(0); i < moveList.Count; i++ {
 		move := moveList.Moves[i]
 		if !pos.MoveIsLegal(move) {
@@ -140,6 +182,8 @@ func Quiescence(pos *Position, alpha, beta int32, nodes *int, startTime *time.Ti
 
 func alphaBetaInner(pos *Position, alpha, beta int32, depth int, nodes *int, startTime *time.Time, timeLimit *time.Duration) int32 {
 	moveList := GenMoves(pos, BB_Full)
+	ScoreMoves(pos, &moveList)
+	OrderMoves(pos, &moveList)
 
 	if moveList.Count == 0 {
 		if pos.Checkers(pos.Turn) != 0 {
