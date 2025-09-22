@@ -152,6 +152,19 @@ func (pos *Position) EndgameMaterial(color uint8) int32 {
 	return ans
 }
 
+func (pos *Position) KingSafety(color uint8) int32 {
+	safetyScore := int32(1000)
+
+	// Obviously, if the King is in check, it is not going to be safe.
+	checkers := pos.Checkers(color)
+	checkerCount := int32(bits.OnesCount64(uint64(checkers)))
+	safetyScore -= checkerCount * 100
+
+	// Pieces being close to the King might be a bit of an issue.
+	
+	return safetyScore
+}
+
 func Evaluate(pos *Position) int32 {
 	us := pos.Turn
 	them := pos.Turn ^ 1
