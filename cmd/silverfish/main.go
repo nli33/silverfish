@@ -89,7 +89,6 @@ func main() {
 
 	go HandleMessages(messageChannel)
 
-mainloop:
 	for {
 		message := engine.UciClientMessage{}
 		select {
@@ -110,7 +109,7 @@ mainloop:
 		case engine.UciPositionClientMessage:
 			position = *message.Position
 		case engine.UciQuitClientMessage:
-			break mainloop
+			return
 		case engine.UciGoClientMessage:
 			go executeGoCommand(actionAlertChannel, &position, message.GoMessage)
 		}
