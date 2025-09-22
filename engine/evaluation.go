@@ -210,9 +210,12 @@ func Evaluate(pos *Position) int32 {
 	ourEGMaterial := pos.EndgameMaterial(us)
 	theirEGMaterial := pos.EndgameMaterial(them)
 
+	ourKingSafety := pos.KingSafety(us)
+	theirKingSafety := pos.KingSafety(them)
+
 	isEndgame := (ourEGMaterial + theirEGMaterial) <= 1400
 
-	eval := ourMaterial - theirMaterial
+	eval := ourMaterial + ourKingSafety - theirMaterial - theirKingSafety
 
 	for piece := Pawn; piece <= King; piece++ {
 		bb := pos.Pieces[us][piece]
