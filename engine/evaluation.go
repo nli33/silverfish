@@ -1,6 +1,9 @@
 package engine
 
-import "math/bits"
+import (
+	"math"
+	"math/bits"
+)
 
 const Infinity int32 = 1000000
 
@@ -152,6 +155,52 @@ func (pos *Position) EndgameMaterial(color uint8) int32 {
 	return ans
 }
 
+func (pos *Position) KingSafety(color uint8) int32 {
+	safetyScore := int32(1000)
+
+	// Obviously, if the King is in check, it is not going to be safe.
+	checkers := pos.Checkers(color)
+	checkerCount := int32(bits.OnesCount64(uint64(checkers)))
+	safetyScore -= checkerCount * 100
+
+	kingSquare := pos.GetKingSquare(color)
+	kingRank := RankOf(kingSquare)
+	kingFile := FileOf(kingSquare)
+
+	// Enemy pieces being close to the King might be a bit of an issue.
+	// TODO: Have a more optimal way of doing this later. Probably by using the bitboards and stuff
+	for square := range NoSquare {
+		colorOfPiece, piece := pos.GetSquare(square)
+
+		pieceRank := RankOf(square)
+		pieceFile := FileOf(square)
+
+		rankDiff := Abs(int(pieceRank - kingRank))
+		fileDiff := Abs(int(pieceFile - kingFile))
+
+		distance := math.Sqrt(float64(rankDiff*rankDiff + fileDiff*fileDiff))
+		distanceWeight := 10.0 - distance // the closer it is the higher the weight
+
+		if colorOfPiece != color {
+			switch piece {
+			case Queen:
+				safetyScore -= int32(20 * distanceWeight)
+			case Rook:
+				safetyScore -= int32(10 * distanceWeight)
+			case Bishop:
+				safetyScore -= int32(5 * distanceWeight)
+			case Knight:
+				safetyScore -= int32(5 * distanceWeight)
+			case Pawn:
+				// Not as small as a pawn storm could be dangerous,
+				safetyScore -= int32(3 * distanceWeight)
+			}
+		}
+	}
+
+	return safetyScore
+}
+
 func Evaluate(pos *Position) int32 {
 	us := pos.Turn
 	them := pos.Turn ^ 1
@@ -161,9 +210,12 @@ func Evaluate(pos *Position) int32 {
 	ourEGMaterial := pos.EndgameMaterial(us)
 	theirEGMaterial := pos.EndgameMaterial(them)
 
+	ourKingSafety := pos.KingSafety(us)
+	theirKingSafety := pos.KingSafety(them)
+
 	isEndgame := (ourEGMaterial + theirEGMaterial) <= 1400
 
-	eval := ourMaterial - theirMaterial
+	eval := ourMaterial + ourKingSafety - theirMaterial - theirKingSafety
 
 	for piece := Pawn; piece <= King; piece++ {
 		bb := pos.Pieces[us][piece]

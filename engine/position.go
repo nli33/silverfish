@@ -85,6 +85,10 @@ func (pos *Position) PutPiecesBB(pieces [2][6]Bitboard) {
 	}
 }
 
+func (pos *Position) GetKingSquare(color uint8) Square {
+	return Lsb(pos.Pieces[color][King])
+}
+
 func (pos *Position) RemovePiece(sq Square) {
 	piece := pos.Board[sq]
 	color := ColorOf(piece)
@@ -109,8 +113,7 @@ func (pos *Position) Equals(otherPos Position) bool {
 		pos.EnPassantSquare == otherPos.EnPassantSquare
 }
 
-// (color, piece)
-func (pos *Position) GetSquare(sq Square) (uint8, uint8) {
+func (pos *Position) GetSquare(sq Square) (color uint8, piece uint8) {
 	p := pos.Board[sq]
 	if p == NoPiece {
 		return NoColor, NoPiece
