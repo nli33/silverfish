@@ -84,11 +84,13 @@ func main() {
 	messageChannel := make(chan engine.UciClientMessage, 5)
 	// Used for reporting if an action is done.
 	actionAlertChannel := make(chan bool)
+	active := false
 
 	position := engine.StartingPosition()
 
 	go HandleMessages(messageChannel)
 
+mainloop:
 	for {
 		message := engine.UciClientMessage{}
 		select {
@@ -97,21 +99,30 @@ func main() {
 			continue
 		}
 
-		switch message.MessageType {
-		case engine.UciUciClientMessage:
-			engine.UciSetEngineName("Silverfish 0.0.0a")
-			engine.UciSetAuthor("李能和赵梁越")
-			engine.UciSetProtocol(2)
+		if active {
+			select {
+			case <-actionAlertChannel:
+				active = false
+			default:
+				// Do nothing :ye:
+			}
+		} else {
+			switch message.MessageType {
+			case engine.UciUciClientMessage:
+				engine.UciSetEngineName("Silverfish 0.0.0a")
+				engine.UciSetAuthor("李能和赵梁越")
+				engine.UciSetProtocol(2)
 
-			engine.UciOk()
-		case engine.UciIsReadyClientMessage:
-			engine.UciReadyOk()
-		case engine.UciPositionClientMessage:
-			position = *message.Position
-		case engine.UciQuitClientMessage:
-			return
-		case engine.UciGoClientMessage:
-			go executeGoCommand(actionAlertChannel, &position, message.GoMessage)
+				engine.UciOk()
+			case engine.UciIsReadyClientMessage:
+				engine.UciReadyOk()
+			case engine.UciPositionClientMessage:
+				position = *message.Position
+			case engine.UciQuitClientMessage:
+				break mainloop
+			case engine.UciGoClientMessage:
+				go executeGoCommand(actionAlertChannel, &position, message.GoMessage)
+			}
 		}
 	}
 }

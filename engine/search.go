@@ -12,19 +12,17 @@ const MaxQuiescenceDepth = 8
 // return number in milliseconds
 func TimeLimit(pos *Position, command *UciGoMessage) time.Duration {
 	var ourTime, ourInc int32 //, theirTime, theirInc int32
-	switch pos.Turn {
-	case White:
+	if pos.Turn == White {
 		ourTime = command.WTime
 		ourInc = command.WInc
 		// theirTime = command.BTime
 		// theirInc = command.BInc
-	case Black:
+	} else if pos.Turn == Black {
 		ourTime = command.BTime
 		ourInc = command.BInc
 		// theirTime = command.WTime
 		// theirInc = command.WInc
 	}
-
 	estimatedMovesLeft := max(10, 100-pos.FullMoves())
 	// multiplying time.Miillisecond twice?
 	return min(MaxMovetime, time.Duration(ourTime/int32(estimatedMovesLeft)+ourInc/4))
