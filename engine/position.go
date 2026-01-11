@@ -13,7 +13,11 @@ type Position struct {
 	// Turn: 0=white 1=black
 	Turn uint8
 
-	Board    [64]uint8
+	// 0-5: white pieces
+	// 10-15: black pieces
+	// 5: NoSquare
+	Board [64]uint8
+
 	Pieces   [2][6]Bitboard
 	Sides    [2]Bitboard
 	Blockers Bitboard
@@ -40,6 +44,8 @@ type Position struct {
 
 	// past states
 	History []State
+
+	Nnue *NNUE
 }
 
 type State struct {
@@ -64,6 +70,13 @@ func StartingPosition() Position {
 func (pos *Position) PutPiece(sq Square, piece uint8, color uint8) {
 	sqBB := Bitboard(1 << sq)
 	pos.Pieces[color][piece] |= sqBB
+
+	// nnue operations come before this adjustment by 10 (0-5 expected; FeatureIndex performs adjustment by 6)
+	fWhite := FeatureIndex(White, color, piece, sq)
+	fBlack := FeatureIndex(Black, color, piece, sq)
+	pos.Nnue.Add(fWhite, White)
+	pos.Nnue.Add(fBlack, Black)
+
 	if color == Black {
 		piece += 10
 	}
@@ -73,6 +86,12 @@ func (pos *Position) PutPiece(sq Square, piece uint8, color uint8) {
 }
 
 func (pos *Position) PutPiecesBB(pieces [2][6]Bitboard) {
+	// this check is for testing purposes only
+	// .. well this whole function is for testing purposes only
+	if pos.Nnue == nil {
+		pos.Nnue, _ = LoadNNUE("test.nnue")
+	}
+
 	for sq := SquareA1; sq <= SquareH8; sq++ {
 		pos.RemovePiece(sq)
 		for piece := Pawn; piece <= King; piece++ {
@@ -98,6 +117,12 @@ func (pos *Position) RemovePiece(sq Square) {
 	if color != NoColor {
 		pos.Pieces[color][piece] &^= sqBB
 	}
+
+	// nnue operations come after this adjustment by 10 (0-5 expected; FeatureIndex performs adjustment by 6)
+	fWhite := FeatureIndex(White, color, piece, sq)
+	fBlack := FeatureIndex(Black, color, piece, sq)
+	pos.Nnue.Remove(fWhite, White)
+	pos.Nnue.Remove(fBlack, Black)
 }
 
 func (pos *Position) Equals(otherPos Position) bool {
@@ -110,6 +135,7 @@ func (pos *Position) Equals(otherPos Position) bool {
 }
 
 // (color, piece)
+// see engine.Position.Board documentation for encoding
 func (pos *Position) GetSquare(sq Square) (uint8, uint8) {
 	p := pos.Board[sq]
 	if p == NoPiece {
@@ -199,6 +225,12 @@ func (pos *Position) ToFEN() string {
 
 func FromFEN(fen string) Position {
 	var pos Position
+
+	var err error
+	pos.Nnue, err = LoadNNUE("test.nnue")
+	if err != nil {
+		panic("error loading NNUE file")
+	}
 
 	parts := strings.Split(fen, " ")
 	if len(parts) < 6 {
