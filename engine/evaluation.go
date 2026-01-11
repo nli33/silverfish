@@ -152,7 +152,7 @@ func (pos *Position) EndgameMaterial(color uint8) int32 {
 	return ans
 }
 
-func Evaluate(pos *Position) int32 {
+func EvaluateHCE(pos *Position) int32 {
 	us := pos.Turn
 	them := pos.Turn ^ 1
 
@@ -200,4 +200,12 @@ func Evaluate(pos *Position) int32 {
 	}
 
 	return eval
+}
+
+func EvaluateNNUE(pos *Position) int32 {
+	return int32(pos.Nnue.Evaluate(pos.Turn) * 1000)
+}
+
+func Evaluate(pos *Position) int32 {
+	return EvaluateNNUE(pos)
 }
