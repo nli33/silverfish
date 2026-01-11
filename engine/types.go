@@ -192,6 +192,7 @@ const BB_FileA = Bitboard(0x101010101010101)
 const BB_FileH = Bitboard(0x8080808080808080)
 const BB_Empty = Bitboard(0)
 const BB_Full = Bitboard(0xffffffffffffffff)
+const FlipVertical = 0b111000 // xor mask for flipping a square vertically
 
 // rows
 func RankOf(square Square) uint8 {
