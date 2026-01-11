@@ -155,7 +155,6 @@ func (nnue *NNUE) Add(feature uint16, perspective uint8) {
 
 // incrementally remove a feature
 func (nnue *NNUE) Remove(feature uint16, perspective uint8) {
-	fmt.Println(feature)
 	col := nnue.FeatureCols[feature]
 	for o := 0; o < nnue.L1; o++ {
 		nnue.Acc.Values[perspective][o] -= col[o]
