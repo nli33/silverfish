@@ -11,7 +11,7 @@ import (
 func TestRefreshEval(t *testing.T) {
 	pos := engine.FromFEN("6k1/5p1p/1q2p1p1/1PnpP3/3N4/1Pr5/P5PP/3QR1K1 w - - 3 37")
 	// pos = engine.StartingPosition()
-	nnue, err := engine.LoadNNUE("test.nnue")
+	nnue, err := engine.LoadNNUE("1028.nnue")
 	if err != nil {
 		fmt.Println(err)
 		t.Errorf("Error")

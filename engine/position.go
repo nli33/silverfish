@@ -89,7 +89,7 @@ func (pos *Position) PutPiecesBB(pieces [2][6]Bitboard) {
 	// this check is for testing purposes only
 	// .. well this whole function is for testing purposes only
 	if pos.Nnue == nil {
-		pos.Nnue, _ = LoadNNUE("test.nnue")
+		pos.Nnue, _ = LoadNNUE("1028.nnue")
 	}
 
 	for sq := SquareA1; sq <= SquareH8; sq++ {
@@ -227,7 +227,7 @@ func FromFEN(fen string) Position {
 	var pos Position
 
 	var err error
-	pos.Nnue, err = LoadNNUE("test.nnue")
+	pos.Nnue, err = LoadNNUE("1028.nnue")
 	if err != nil {
 		panic("error loading NNUE file")
 	}

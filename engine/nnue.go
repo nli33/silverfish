@@ -133,8 +133,23 @@ func (nnue *NNUE) Refresh(features []uint16, perspective uint8) {
 	copy(acc, nnue.BInput)
 	for _, f := range features {
 		col := nnue.FeatureCols[f]
-		for o := 0; o < nnue.L1; o++ {
+		for o := 0; o < nnue.L1; o += 16 {
 			acc[o] += col[o]
+			acc[o+1] += col[o+1]
+			acc[o+2] += col[o+2]
+			acc[o+3] += col[o+3]
+			acc[o+4] += col[o+4]
+			acc[o+5] += col[o+5]
+			acc[o+6] += col[o+6]
+			acc[o+7] += col[o+7]
+			acc[o+8] += col[o+8]
+			acc[o+9] += col[o+9]
+			acc[o+10] += col[o+10]
+			acc[o+11] += col[o+11]
+			acc[o+12] += col[o+12]
+			acc[o+13] += col[o+13]
+			acc[o+14] += col[o+14]
+			acc[o+15] += col[o+15]
 		}
 	}
 }
@@ -148,16 +163,48 @@ func (nnue *NNUE) RefreshAll(featuresW, featuresB []uint16) {
 // incrementally add a feature
 func (nnue *NNUE) Add(feature uint16, perspective uint8) {
 	col := nnue.FeatureCols[feature]
-	for o := 0; o < nnue.L1; o++ {
-		nnue.Acc.Values[perspective][o] += col[o]
+	acc := nnue.Acc.Values[perspective]
+	for o := 0; o < nnue.L1; o += 16 {
+		acc[o] += col[o]
+		acc[o+1] += col[o+1]
+		acc[o+2] += col[o+2]
+		acc[o+3] += col[o+3]
+		acc[o+4] += col[o+4]
+		acc[o+5] += col[o+5]
+		acc[o+6] += col[o+6]
+		acc[o+7] += col[o+7]
+		acc[o+8] += col[o+8]
+		acc[o+9] += col[o+9]
+		acc[o+10] += col[o+10]
+		acc[o+11] += col[o+11]
+		acc[o+12] += col[o+12]
+		acc[o+13] += col[o+13]
+		acc[o+14] += col[o+14]
+		acc[o+15] += col[o+15]
 	}
 }
 
 // incrementally remove a feature
 func (nnue *NNUE) Remove(feature uint16, perspective uint8) {
 	col := nnue.FeatureCols[feature]
-	for o := 0; o < nnue.L1; o++ {
-		nnue.Acc.Values[perspective][o] -= col[o]
+	acc := nnue.Acc.Values[perspective]
+	for o := 0; o < nnue.L1; o += 16 {
+		acc[o] -= col[o]
+		acc[o+1] -= col[o+1]
+		acc[o+2] -= col[o+2]
+		acc[o+3] -= col[o+3]
+		acc[o+4] -= col[o+4]
+		acc[o+5] -= col[o+5]
+		acc[o+6] -= col[o+6]
+		acc[o+7] -= col[o+7]
+		acc[o+8] -= col[o+8]
+		acc[o+9] -= col[o+9]
+		acc[o+10] -= col[o+10]
+		acc[o+11] -= col[o+11]
+		acc[o+12] -= col[o+12]
+		acc[o+13] -= col[o+13]
+		acc[o+14] -= col[o+14]
+		acc[o+15] -= col[o+15]
 	}
 }
 
