@@ -133,7 +133,7 @@ func (nnue *NNUE) Refresh(features []uint16, perspective uint8) {
 	copy(acc, nnue.BInput)
 	for _, f := range features {
 		col := nnue.FeatureCols[f]
-		for o := 0; o < nnue.L1; o += 16 {
+		for o := 0; o < len(acc); o += 16 {
 			acc[o] += col[o]
 			acc[o+1] += col[o+1]
 			acc[o+2] += col[o+2]
@@ -164,7 +164,7 @@ func (nnue *NNUE) RefreshAll(featuresW, featuresB []uint16) {
 func (nnue *NNUE) Add(feature uint16, perspective uint8) {
 	col := nnue.FeatureCols[feature]
 	acc := nnue.Acc.Values[perspective]
-	for o := 0; o < nnue.L1; o += 16 {
+	for o := 0; o < len(acc); o += 16 {
 		acc[o] += col[o]
 		acc[o+1] += col[o+1]
 		acc[o+2] += col[o+2]
