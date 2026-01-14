@@ -31,6 +31,8 @@ type Accumulator struct {
 	Values [2][]float32
 }
 
+// TODO: Accumulator stack
+
 func FeatureIndex(perspective uint8, pieceColor uint8, pieceType uint8, sq Square) uint16 {
 	friendly := perspective == pieceColor
 	pieceIdx := pieceType
@@ -188,7 +190,7 @@ func (nnue *NNUE) Add(feature uint16, perspective uint8) {
 func (nnue *NNUE) Remove(feature uint16, perspective uint8) {
 	col := nnue.FeatureCols[feature]
 	acc := nnue.Acc.Values[perspective]
-	for o := 0; o < nnue.L1; o += 16 {
+	for o := 0; o < len(acc); o += 16 {
 		acc[o] -= col[o]
 		acc[o+1] -= col[o+1]
 		acc[o+2] -= col[o+2]
