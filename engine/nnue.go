@@ -122,14 +122,15 @@ func (nnue *NNUE) BuildFeatureCols() {
 	for f := 0; f < numInputs; f++ {
 		col := make([]float32, l1)
 		for o := 0; o < l1; o++ {
-			col[o] = nnue.WInput[f*l1+o]
+			col[o] = nnue.WInput[o*numInputs+f]
 		}
 		cols[f] = col
 	}
 	nnue.FeatureCols = cols
 }
 
-// add a whole set of initial features (overwriting existing features)
+// add a whole set of initial features (overwriting existing features).
+// this is the only place where input bias is added
 func (nnue *NNUE) Refresh(features []uint16, perspective uint8) {
 	acc := nnue.Acc.Values[perspective]
 	copy(acc, nnue.BInput)
@@ -163,6 +164,8 @@ func (nnue *NNUE) RefreshAll(featuresW, featuresB []uint16) {
 }
 
 // incrementally add a feature
+// NOTE: only using Add() is incorrect, since no bias is added
+// remember to also to perform an empty refresh? (ex: in FromFEN)
 func (nnue *NNUE) Add(feature uint16, perspective uint8) {
 	col := nnue.FeatureCols[feature]
 	acc := nnue.Acc.Values[perspective]
