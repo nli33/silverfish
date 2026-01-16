@@ -255,7 +255,8 @@ func FromFEN(fen string) Position {
 			spaces := uint8(char - '0')
 			sq := NewSquare(rank, file)
 			for i := uint8(0); i < spaces; i++ {
-				pos.RemovePiece(sq)
+				//pos.RemovePiece(sq)
+				pos.Board[sq] = NoPiece
 				sq++
 			}
 			file += spaces
