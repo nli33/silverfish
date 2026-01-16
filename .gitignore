@@ -2,18 +2,32 @@
 evaluation_test.go
 search_test.go
 
+# various .nnue models (alternative models or models for testing)
 models/
+
 bin/
 todo.md
-cmp.py
+
+# Perft output comparison files
 perft1
 perft2
-cpu.prof
+
+# Profiling
+*.prof
+
+# SPRT + opening book
 *.pgn
+
+# some opening books?
 *.epd
 
 # fastchess
 config.json 
+
+__pycache__/
+.DS_Store
+
+# ---------------------
 
 # If you prefer the allow list template instead of the deny list, see community template:
 # https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
