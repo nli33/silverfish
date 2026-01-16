@@ -223,6 +223,7 @@ func (pos *Position) ToFEN() string {
 	return fen
 }
 
+// note: full refresh automatically on creation
 func FromFEN(fen string) Position {
 	var pos Position
 
@@ -231,6 +232,8 @@ func FromFEN(fen string) Position {
 	if err != nil {
 		panic("error loading NNUE file")
 	}
+	// empty refresh to add biases
+	pos.Nnue.RefreshAll([]uint16{}, []uint16{})
 
 	parts := strings.Split(fen, " ")
 	if len(parts) < 6 {
