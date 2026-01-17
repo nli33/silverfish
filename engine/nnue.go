@@ -46,7 +46,17 @@ func FeatureIndex(perspective uint8, pieceColor uint8, pieceType uint8, sq Squar
 }
 
 func LoadNNUE(path string) (*NNUE, error) {
-	f, err := os.Open(path)
+	// resolve path (either user-provided or embedded default written to a temp file)
+	resolvedPath, cleanup, err := resolveNNUEPath(path)
+	if err != nil {
+		return nil, err
+	}
+	// remove temp file (if any) when done
+	if cleanup != nil {
+		defer cleanup()
+	}
+
+	f, err := os.Open(resolvedPath)
 	if err != nil {
 		return nil, err
 	}
