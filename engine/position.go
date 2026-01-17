@@ -284,11 +284,12 @@ func FromFEN(fen string) Position {
 		}
 	}
 
-	if turnPart == "w" {
+	switch turnPart {
+	case "w":
 		pos.Turn = White
-	} else if turnPart == "b" {
+	case "b":
 		pos.Turn = Black
-	} else {
+	default:
 		panic("invalid turn field")
 	}
 
@@ -369,13 +370,14 @@ func (pos *Position) DoMove(move Move) {
 	}
 
 	// update castling rights
-	if movingPiece == King {
+	switch movingPiece {
+	case King:
 		if ourColor == White && from == SquareE1 {
 			pos.CastlingRights &^= 0b0011
 		} else if ourColor == Black && from == SquareE8 {
 			pos.CastlingRights &^= 0b1100
 		}
-	} else if movingPiece == Rook {
+	case Rook:
 		switch {
 		case from == SquareA1 && ourColor == White:
 			pos.CastlingRights &^= WhiteQueenside

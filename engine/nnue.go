@@ -33,6 +33,8 @@ type Accumulator struct {
 
 // TODO: Accumulator stack
 
+// for black's perspective, the board is flipped for evaluation purposes
+// this way the first layer parameters only has to "learn" how to play one perspective, which helps with generalization (?)
 func FeatureIndex(perspective uint8, pieceColor uint8, pieceType uint8, sq Square) uint16 {
 	friendly := perspective == pieceColor
 	pieceIdx := pieceType
