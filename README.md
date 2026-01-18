@@ -12,12 +12,13 @@ UCI Chess Engine (work-in-progress)
 - Negamax search with alpha-beta pruning
 - Iterative deepening
 - Quiescence search
-- Evaluation using material counting + piece-square tables
+- NNUE Evaluation, (768->256)x2->1 architecture, vertical mirroring, trained with PyTorch
+    - Previously: evaluation using material counting + piece-square tables
 
 ## Quickstart
 
 The engine itself has no external dependencies besides Go 1.22.x, so it should just work.
 
 ```bash
-go run ./cmd/silverfish
+make run
 ```
