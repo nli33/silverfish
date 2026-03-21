@@ -185,6 +185,8 @@ func alphaBetaInner(pos *Position, alpha, beta int32, depth int, nodes *int, sta
 	ScoreMoves(pos, &moveList)
 	OrderMoves(pos, &moveList)
 
+	hasLegal := false
+
 	if moveList.Count == 0 {
 		if pos.Checkers(pos.Turn) != 0 {
 			// checkmate
@@ -206,6 +208,7 @@ func alphaBetaInner(pos *Position, alpha, beta int32, depth int, nodes *int, sta
 		if !pos.MoveIsLegal(move) {
 			continue
 		}
+		hasLegal = true
 
 		*nodes++
 
@@ -232,6 +235,16 @@ func alphaBetaInner(pos *Position, alpha, beta int32, depth int, nodes *int, sta
 				score:    bestScore,
 				hasScore: true,
 			})
+		}
+	}
+
+	// GenMoves returns a list of valid but possibly illegal (leaves king in check) moves
+	// avoid the case where all moves are illegal (stalemate/checkmate) but moveList.Count != 0
+	if !hasLegal {
+		if pos.Checkers(pos.Turn) != 0 {
+			return -Infinity
+		} else {
+			return 0
 		}
 	}
 
