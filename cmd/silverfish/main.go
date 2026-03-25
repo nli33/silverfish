@@ -39,19 +39,29 @@ func executeGoCommand(channel chan bool, position *engine.Position, command *eng
 		return
 	}
 
-	var bestMove engine.Move
+	depth := engine.InfiniteDepth
+	moveTime := engine.InfiniteMovetime
+	switch {
+	case command.Infinite:
+		// keep defaults
 
-	if command.Infinite {
-		// We set a limited depth to avoid stack overflow (as we are using recursion
-		// to implement the search right now)
-		_, bestMove = engine.Search(position, engine.InfiniteDepth, engine.InfiniteMovetime)
-	} else if command.Movetime != 0 {
-		_, bestMove = engine.Search(position, engine.InfiniteDepth, time.Duration(command.Movetime)*time.Millisecond)
-	} else if command.Depth != 0 {
-		_, bestMove = engine.Search(position, int(command.Depth), engine.InfiniteMovetime)
-	} else {
-		_, bestMove = engine.Search(position, engine.InfiniteDepth, engine.TimeLimit(position, command)*time.Millisecond)
+	case command.Movetime != 0:
+		moveTime = time.Duration(command.Movetime) * time.Millisecond
+
+	case command.Depth != 0:
+		depth = int(command.Depth)
+
+	default:
+		moveTime = engine.TimeLimit(position, command) * time.Millisecond
 	}
+	search := engine.Search{
+		MaxDepth:  depth,
+		TimeLimit: moveTime,
+	}
+	search.Init(*position)
+
+	var bestMove engine.Move
+	_, bestMove = search.Search()
 
 	engine.UciBestMove(bestMove)
 

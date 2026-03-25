@@ -9,6 +9,16 @@ const InfiniteMovetime = 600000 * time.Millisecond // arbitrary large number for
 const MaxMovetime = 2000                           // max movetime for any move if unspecified
 const MaxQuiescenceDepth = 8
 
+type Search struct {
+	Pos   Position
+	Nodes int
+
+	// limits
+	StartTime time.Time
+	TimeLimit time.Duration
+	MaxDepth  int
+}
+
 // return number in milliseconds
 func TimeLimit(pos *Position, command *UciGoMessage) time.Duration {
 	var ourTime, ourInc int32 //, theirTime, theirInc int32
@@ -73,17 +83,16 @@ func OrderMoves(pos *Position, moveList *MoveList) {
 // alpha: best score guaranteed for max-player. can prune branches that give less than this
 // beta: upper limit that min-player will tolerate. min-player will prune lines exceeding this
 
-// pass timeLimit in nanoseconds (default)
-func Search(pos *Position, maxDepth int, timeLimit time.Duration) (int32, Move) {
-	startTime := time.Now()
-
+// pass TimeLimit in nanoseconds (default)
+func (search *Search) Search() (int32, Move) {
 	var bestMove Move
 	bestScore := -Infinity
 
-	moveList := GenMoves(pos, BB_Full)
-	nodes := 0
+	search.StartTime = time.Now()
 
-	for depth := 1; depth <= maxDepth; depth++ {
+	moveList := GenMoves(&search.Pos, BB_Full)
+
+	for depth := 1; depth <= search.MaxDepth; depth++ {
 		alpha := -Infinity
 		beta := Infinity
 
@@ -92,15 +101,15 @@ func Search(pos *Position, maxDepth int, timeLimit time.Duration) (int32, Move) 
 
 		for i := uint8(0); i < moveList.Count; i++ {
 			move := moveList.Moves[i]
-			if !pos.MoveIsLegal(move) {
+			if !search.Pos.MoveIsLegal(move) {
 				continue
 			}
 
-			pos.DoMove(move)
-			score := -alphaBetaInner(pos, -beta, -alpha, depth-1, &nodes, &startTime, &timeLimit)
-			pos.UndoMove(move)
+			search.Pos.DoMove(move)
+			score := -search.alphaBetaInner(-beta, -alpha, depth-1)
+			search.Pos.UndoMove(move)
 
-			if time.Since(startTime) > timeLimit {
+			if time.Since(search.StartTime) > search.TimeLimit {
 				break
 			}
 
@@ -118,12 +127,12 @@ func Search(pos *Position, maxDepth int, timeLimit time.Duration) (int32, Move) 
 				hasDepth: true,
 				score:    bestScore,
 				hasScore: true,
-				nodes:    nodes,
+				nodes:    search.Nodes,
 				hasNodes: true,
 			})
 		}
 
-		if time.Since(startTime) > timeLimit {
+		if time.Since(search.StartTime) > search.TimeLimit {
 			break
 		}
 
@@ -134,12 +143,12 @@ func Search(pos *Position, maxDepth int, timeLimit time.Duration) (int32, Move) 
 	return bestScore, bestMove
 }
 
-func Quiescence(pos *Position, alpha, beta int32, nodes *int, startTime *time.Time, timeLimit *time.Duration, qdepth int) int32 {
+func (search *Search) Quiescence(alpha, beta int32, qdepth int) int32 {
 	if qdepth > MaxQuiescenceDepth {
-		return Evaluate(pos)
+		return Evaluate(&search.Pos)
 	}
 
-	standPat := Evaluate(pos)
+	standPat := Evaluate(&search.Pos)
 	if standPat >= beta {
 		return beta
 	}
@@ -148,26 +157,26 @@ func Quiescence(pos *Position, alpha, beta int32, nodes *int, startTime *time.Ti
 	}
 
 	var moveList MoveList
-	if pos.Checkers(pos.Turn) != 0 {
-		moveList = GenMoves(pos, BB_Full)
+	if search.Pos.Checkers(search.Pos.Turn) != 0 {
+		moveList = GenMoves(&search.Pos, BB_Full)
 	} else {
-		moveList = GenMoves(pos, pos.Sides[pos.Turn^1]) // only captures
+		moveList = GenMoves(&search.Pos, search.Pos.Sides[search.Pos.Turn^1]) // only captures
 	}
 
-	ScoreMoves(pos, &moveList)
-	OrderMoves(pos, &moveList)
+	ScoreMoves(&search.Pos, &moveList)
+	OrderMoves(&search.Pos, &moveList)
 
 	for i := uint8(0); i < moveList.Count; i++ {
 		move := moveList.Moves[i]
-		if !pos.MoveIsLegal(move) {
+		if !search.Pos.MoveIsLegal(move) {
 			continue
 		}
 
-		*nodes++
+		search.Nodes++
 
-		pos.DoMove(move)
-		score := -Quiescence(pos, -beta, -alpha, nodes, startTime, timeLimit, qdepth+1)
-		pos.UndoMove(move)
+		search.Pos.DoMove(move)
+		score := -search.Quiescence(-beta, -alpha, qdepth+1)
+		search.Pos.UndoMove(move)
 
 		if score >= beta {
 			return beta
@@ -180,15 +189,18 @@ func Quiescence(pos *Position, alpha, beta int32, nodes *int, startTime *time.Ti
 	return alpha
 }
 
-func alphaBetaInner(pos *Position, alpha, beta int32, depth int, nodes *int, startTime *time.Time, timeLimit *time.Duration) int32 {
-	moveList := GenMoves(pos, BB_Full)
-	ScoreMoves(pos, &moveList)
-	OrderMoves(pos, &moveList)
+func (search *Search) alphaBetaInner(alpha, beta int32, depth int) int32 {
+	search.Nodes++
+
+	moveList := GenMoves(&search.Pos, BB_Full)
+
+	ScoreMoves(&search.Pos, &moveList)
+	OrderMoves(&search.Pos, &moveList)
 
 	hasLegal := false
 
 	if moveList.Count == 0 {
-		if pos.Checkers(pos.Turn) != 0 {
+		if search.Pos.Checkers(search.Pos.Turn) != 0 {
 			// checkmate
 			return -Infinity
 		} else {
@@ -199,22 +211,20 @@ func alphaBetaInner(pos *Position, alpha, beta int32, depth int, nodes *int, sta
 
 	if depth == 0 {
 		// return Evaluate(pos)
-		return Quiescence(pos, alpha, beta, nodes, startTime, timeLimit, 0)
+		return search.Quiescence(alpha, beta, 0)
 	}
 
 	bestScore := -Infinity
 	for i := uint8(0); i < moveList.Count; i++ {
 		move := moveList.Moves[i]
-		if !pos.MoveIsLegal(move) {
+		if !search.Pos.MoveIsLegal(move) {
 			continue
 		}
 		hasLegal = true
 
-		*nodes++
-
-		pos.DoMove(move)
-		score := -alphaBetaInner(pos, -beta, -alpha, depth-1, nodes, startTime, timeLimit)
-		pos.UndoMove(move)
+		search.Pos.DoMove(move)
+		score := -search.alphaBetaInner(-beta, -alpha, depth-1)
+		search.Pos.UndoMove(move)
 
 		if score >= beta {
 			return score
@@ -226,11 +236,11 @@ func alphaBetaInner(pos *Position, alpha, beta int32, depth int, nodes *int, sta
 			alpha = score
 		}
 
-		if *nodes&32767 == 0 {
+		if search.Nodes&32767 == 0 {
 			UciInfo(UciInfoMessage{
 				depth:    depth,
 				hasDepth: true,
-				nodes:    *nodes,
+				nodes:    search.Nodes,
 				hasNodes: true,
 				score:    bestScore,
 				hasScore: true,
@@ -241,7 +251,7 @@ func alphaBetaInner(pos *Position, alpha, beta int32, depth int, nodes *int, sta
 	// GenMoves returns a list of valid but possibly illegal (leaves king in check) moves
 	// avoid the case where all moves are illegal (stalemate/checkmate) but moveList.Count != 0
 	if !hasLegal {
-		if pos.Checkers(pos.Turn) != 0 {
+		if search.Pos.Checkers(search.Pos.Turn) != 0 {
 			return -Infinity
 		} else {
 			return 0
