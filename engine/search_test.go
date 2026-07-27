@@ -90,3 +90,20 @@ func TestSearchFindsMateInOne(t *testing.T) {
 		})
 	}
 }
+
+// A free, undefended piece with no counterplay must be captured by any
+// correct search -- independent of eval tuning, since forfeiting it is a
+// clear material loss under any reasonable evaluation.
+func TestSearchCapturesHangingPiece(t *testing.T) {
+	pos := engine.FromFEN("4k3/8/8/7q/5N2/8/8/4K3 w - - 0 1")
+	search := engine.Search{
+		MaxDepth:  3,
+		TimeLimit: 4 * time.Second,
+	}
+	search.Init(&pos)
+
+	_, bestMove := search.Search()
+	if bestMove.To() != engine.SquareH5 {
+		t.Errorf("Search() = %s, want a move to h5 capturing the undefended queen", bestMove.ToString())
+	}
+}
