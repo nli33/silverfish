@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -47,23 +49,34 @@ func FeatureIndex(perspective uint8, pieceColor uint8, pieceType uint8, sq Squar
 	return 64*uint16(pieceIdx) + uint16(sq)
 }
 
-func LoadNNUE(path string) (*NNUE, error) {
-	// resolve path (either user-provided or embedded default written to a temp file)
-	resolvedPath, cleanup, err := resolveNNUEPath(path)
-	if err != nil {
-		return nil, err
-	}
-	// remove temp file (if any) when done
-	if cleanup != nil {
-		defer cleanup()
-	}
-
-	f, err := os.Open(resolvedPath)
+// LoadNNUEFile loads a network from a file on disk.
+func LoadNNUEFile(path string) (*NNUE, error) {
+	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
+	return loadNNUEFromReader(bufio.NewReader(f))
+}
 
+// LoadEmbeddedNNUE loads the default network built into the binary.
+func LoadEmbeddedNNUE() (*NNUE, error) {
+	data, err := embeddedNNUEBytes()
+	if err != nil {
+		return nil, err
+	}
+	return loadNNUEFromReader(bytes.NewReader(data))
+}
+
+// LoadNNUE loads the network at path, or the embedded default if path is empty.
+func LoadNNUE(path string) (*NNUE, error) {
+	if path == "" {
+		return LoadEmbeddedNNUE()
+	}
+	return LoadNNUEFile(path)
+}
+
+func loadNNUEFromReader(f io.Reader) (*NNUE, error) {
 	// header
 	magic := make([]byte, 4)
 	if _, err := io.ReadFull(f, magic); err != nil {
@@ -92,6 +105,14 @@ func LoadNNUE(path string) (*NNUE, error) {
 
 	numInputs := int(numInputs32)
 	l1 := int(l132)
+
+	// the accumulator update loops are unrolled in steps of 16
+	if numInputs <= 0 {
+		return nil, fmt.Errorf("invalid NNUE header: numInputs must be positive, got %d", numInputs)
+	}
+	if l1 <= 0 || l1%16 != 0 {
+		return nil, fmt.Errorf("invalid NNUE header: L1 must be a positive multiple of 16, got %d", l1)
+	}
 
 	nnue := &NNUE{
 		NumInputs: numInputs,
