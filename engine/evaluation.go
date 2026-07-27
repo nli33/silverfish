@@ -203,7 +203,7 @@ func EvaluateHCE(pos *Position) int32 {
 }
 
 func EvaluateNNUE(pos *Position) int32 {
-	return int32(pos.Nnue.Evaluate(pos.Turn) * 1000)
+	return int32(pos.Acc.Evaluate(pos.Net, pos.Turn) * 1000)
 }
 
 func Evaluate(pos *Position) int32 {

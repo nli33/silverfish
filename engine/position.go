@@ -45,7 +45,10 @@ type Position struct {
 	// past states
 	History []State
 
-	Nnue *NNUE
+	// Net is the immutable network shared across positions; Acc is this
+	// position's mutable per-perspective evaluation state.
+	Net *Network
+	Acc Accumulator
 }
 
 type State struct {
@@ -74,8 +77,8 @@ func (pos *Position) PutPiece(sq Square, piece uint8, color uint8) {
 	// nnue operations come before this adjustment by 10 (0-5 expected; FeatureIndex performs adjustment by 6)
 	fWhite := FeatureIndex(White, color, piece, sq)
 	fBlack := FeatureIndex(Black, color, piece, sq)
-	pos.Nnue.Add(fWhite, White)
-	pos.Nnue.Add(fBlack, Black)
+	pos.Acc.Add(pos.Net, fWhite, White)
+	pos.Acc.Add(pos.Net, fBlack, Black)
 
 	if color == Black {
 		piece += 10
@@ -88,8 +91,9 @@ func (pos *Position) PutPiece(sq Square, piece uint8, color uint8) {
 func (pos *Position) PutPiecesBB(pieces [2][6]Bitboard) {
 	// this check is for testing purposes only
 	// .. well this whole function is for testing purposes only
-	if pos.Nnue == nil {
-		pos.Nnue, _ = LoadNNUE("")
+	if pos.Net == nil {
+		pos.Net = defaultNet
+		pos.Acc = NewAccumulator(pos.Net)
 	}
 
 	for sq := SquareA1; sq <= SquareH8; sq++ {
@@ -121,8 +125,8 @@ func (pos *Position) RemovePiece(sq Square) {
 	// nnue operations come after this adjustment by 10 (0-5 expected; FeatureIndex performs adjustment by 6)
 	fWhite := FeatureIndex(White, color, piece, sq)
 	fBlack := FeatureIndex(Black, color, piece, sq)
-	pos.Nnue.Remove(fWhite, White)
-	pos.Nnue.Remove(fBlack, Black)
+	pos.Acc.Remove(pos.Net, fWhite, White)
+	pos.Acc.Remove(pos.Net, fBlack, Black)
 }
 
 func (pos *Position) Equals(otherPos Position) bool {
@@ -227,13 +231,13 @@ func (pos *Position) ToFEN() string {
 func FromFEN(fen string) Position {
 	var pos Position
 
-	var err error
-	pos.Nnue, err = LoadNNUE("")
-	if err != nil {
-		panic("error loading NNUE file")
+	if defaultNet == nil {
+		panic("engine.Init() must be called before engine.FromFEN()")
 	}
-	// empty refresh to add biases
-	pos.Nnue.RefreshAll([]uint16{}, []uint16{})
+	pos.Net = defaultNet
+	pos.Acc = NewAccumulator(pos.Net)
+	// install input bias before any Add/Remove
+	pos.Acc.Reset(pos.Net)
 
 	parts := strings.Split(fen, " ")
 	if len(parts) < 6 {

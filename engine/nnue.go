@@ -15,7 +15,10 @@ const (
 	Version = 1
 )
 
-type NNUE struct {
+// Network holds NNUE weights loaded from a file. It is immutable once
+// loaded and safe to share across Positions; per-position evaluation state
+// lives in Accumulator instead.
+type Network struct {
 	NumInputs int
 	L1        int
 
@@ -25,10 +28,10 @@ type NNUE struct {
 	BOutput float32
 
 	FeatureCols [][]float32
-
-	Acc Accumulator
 }
 
+// Accumulator is the mutable per-position NNUE evaluation state: one
+// running sum of active feature columns per perspective.
 type Accumulator struct {
 	Values [2][]float32
 }
@@ -50,7 +53,7 @@ func FeatureIndex(perspective uint8, pieceColor uint8, pieceType uint8, sq Squar
 }
 
 // LoadNNUEFile loads a network from a file on disk.
-func LoadNNUEFile(path string) (*NNUE, error) {
+func LoadNNUEFile(path string) (*Network, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -60,7 +63,7 @@ func LoadNNUEFile(path string) (*NNUE, error) {
 }
 
 // LoadEmbeddedNNUE loads the default network built into the binary.
-func LoadEmbeddedNNUE() (*NNUE, error) {
+func LoadEmbeddedNNUE() (*Network, error) {
 	data, err := embeddedNNUEBytes()
 	if err != nil {
 		return nil, err
@@ -69,14 +72,14 @@ func LoadEmbeddedNNUE() (*NNUE, error) {
 }
 
 // LoadNNUE loads the network at path, or the embedded default if path is empty.
-func LoadNNUE(path string) (*NNUE, error) {
+func LoadNNUE(path string) (*Network, error) {
 	if path == "" {
 		return LoadEmbeddedNNUE()
 	}
 	return LoadNNUEFile(path)
 }
 
-func loadNNUEFromReader(f io.Reader) (*NNUE, error) {
+func loadNNUEFromReader(f io.Reader) (*Network, error) {
 	// header
 	magic := make([]byte, 4)
 	if _, err := io.ReadFull(f, magic); err != nil {
@@ -114,150 +117,177 @@ func loadNNUEFromReader(f io.Reader) (*NNUE, error) {
 		return nil, fmt.Errorf("invalid NNUE header: L1 must be a positive multiple of 16, got %d", l1)
 	}
 
-	nnue := &NNUE{
+	net := &Network{
 		NumInputs: numInputs,
 		L1:        l1,
 	}
 
 	// read network parameters
-	nnue.WInput = make([]float32, l1*numInputs)
-	nnue.BInput = make([]float32, l1)
-	nnue.WOutput = make([]float32, 2*l1)
+	net.WInput = make([]float32, l1*numInputs)
+	net.BInput = make([]float32, l1)
+	net.WOutput = make([]float32, 2*l1)
 
-	if err := binary.Read(f, binary.LittleEndian, &nnue.WInput); err != nil {
+	if err := binary.Read(f, binary.LittleEndian, &net.WInput); err != nil {
 		return nil, err
 	}
-	if err := binary.Read(f, binary.LittleEndian, &nnue.BInput); err != nil {
+	if err := binary.Read(f, binary.LittleEndian, &net.BInput); err != nil {
 		return nil, err
 	}
-	if err := binary.Read(f, binary.LittleEndian, &nnue.WOutput); err != nil {
+	if err := binary.Read(f, binary.LittleEndian, &net.WOutput); err != nil {
 		return nil, err
 	}
-	if err := binary.Read(f, binary.LittleEndian, &nnue.BOutput); err != nil {
+	if err := binary.Read(f, binary.LittleEndian, &net.BOutput); err != nil {
 		return nil, err
 	}
 
 	// build helper representation of first layer's weights
-	nnue.BuildFeatureCols()
+	net.buildFeatureCols()
 
-	// allocate accumulators for both sides
-	nnue.Acc.Values[0] = make([]float32, l1)
-	nnue.Acc.Values[1] = make([]float32, l1)
-
-	return nnue, nil
+	return net, nil
 }
 
-// must be called first before using anything
-func (nnue *NNUE) BuildFeatureCols() {
-	numInputs := int(nnue.NumInputs)
-	l1 := int(nnue.L1)
+func (net *Network) buildFeatureCols() {
+	numInputs := net.NumInputs
+	l1 := net.L1
 	cols := make([][]float32, numInputs)
 	for f := 0; f < numInputs; f++ {
 		col := make([]float32, l1)
 		for o := 0; o < l1; o++ {
-			col[o] = nnue.WInput[o*numInputs+f]
+			col[o] = net.WInput[o*numInputs+f]
 		}
 		cols[f] = col
 	}
-	nnue.FeatureCols = cols
+	net.FeatureCols = cols
 }
 
-// add a whole set of initial features (overwriting existing features).
-// this is the only place where input bias is added
-func (nnue *NNUE) Refresh(features []uint16, perspective uint8) {
-	acc := nnue.Acc.Values[perspective]
-	copy(acc, nnue.BInput)
+// NewAccumulator allocates a zeroed accumulator sized for net.
+func NewAccumulator(net *Network) Accumulator {
+	return Accumulator{
+		Values: [2][]float32{
+			make([]float32, net.L1),
+			make([]float32, net.L1),
+		},
+	}
+}
+
+// Clone returns a deep copy, safe to mutate independently of the original.
+func (acc Accumulator) Clone() Accumulator {
+	if acc.Values[White] == nil && acc.Values[Black] == nil {
+		return Accumulator{}
+	}
+	clone := Accumulator{
+		Values: [2][]float32{
+			make([]float32, len(acc.Values[White])),
+			make([]float32, len(acc.Values[Black])),
+		},
+	}
+	copy(clone.Values[White], acc.Values[White])
+	copy(clone.Values[Black], acc.Values[Black])
+	return clone
+}
+
+// Reset installs net's input bias into both perspectives, discarding any
+// active features. This must be done before the first Add/Remove call --
+// Add/Remove alone never add bias.
+func (acc *Accumulator) Reset(net *Network) {
+	copy(acc.Values[White], net.BInput)
+	copy(acc.Values[Black], net.BInput)
+}
+
+// Refresh overwrites one perspective with net's bias plus the given active features.
+func (acc *Accumulator) Refresh(net *Network, features []uint16, perspective uint8) {
+	a := acc.Values[perspective]
+	copy(a, net.BInput)
 	for _, f := range features {
-		col := nnue.FeatureCols[f]
-		for o := 0; o < len(acc); o += 16 {
-			acc[o] += col[o]
-			acc[o+1] += col[o+1]
-			acc[o+2] += col[o+2]
-			acc[o+3] += col[o+3]
-			acc[o+4] += col[o+4]
-			acc[o+5] += col[o+5]
-			acc[o+6] += col[o+6]
-			acc[o+7] += col[o+7]
-			acc[o+8] += col[o+8]
-			acc[o+9] += col[o+9]
-			acc[o+10] += col[o+10]
-			acc[o+11] += col[o+11]
-			acc[o+12] += col[o+12]
-			acc[o+13] += col[o+13]
-			acc[o+14] += col[o+14]
-			acc[o+15] += col[o+15]
+		col := net.FeatureCols[f]
+		for o := 0; o < len(a); o += 16 {
+			a[o] += col[o]
+			a[o+1] += col[o+1]
+			a[o+2] += col[o+2]
+			a[o+3] += col[o+3]
+			a[o+4] += col[o+4]
+			a[o+5] += col[o+5]
+			a[o+6] += col[o+6]
+			a[o+7] += col[o+7]
+			a[o+8] += col[o+8]
+			a[o+9] += col[o+9]
+			a[o+10] += col[o+10]
+			a[o+11] += col[o+11]
+			a[o+12] += col[o+12]
+			a[o+13] += col[o+13]
+			a[o+14] += col[o+14]
+			a[o+15] += col[o+15]
 		}
 	}
 }
 
-// refresh both perspectives
-func (nnue *NNUE) RefreshAll(featuresW, featuresB []uint16) {
-	nnue.Refresh(featuresW, White)
-	nnue.Refresh(featuresB, Black)
+// RefreshAll overwrites both perspectives with net's bias plus their active features.
+func (acc *Accumulator) RefreshAll(net *Network, featuresW, featuresB []uint16) {
+	acc.Refresh(net, featuresW, White)
+	acc.Refresh(net, featuresB, Black)
 }
 
-// incrementally add a feature
-// NOTE: only using Add() is incorrect, since no bias is added
-// remember to also to perform an empty refresh? (ex: in FromFEN)
-func (nnue *NNUE) Add(feature uint16, perspective uint8) {
-	col := nnue.FeatureCols[feature]
-	acc := nnue.Acc.Values[perspective]
-	for o := 0; o < len(acc); o += 16 {
-		acc[o] += col[o]
-		acc[o+1] += col[o+1]
-		acc[o+2] += col[o+2]
-		acc[o+3] += col[o+3]
-		acc[o+4] += col[o+4]
-		acc[o+5] += col[o+5]
-		acc[o+6] += col[o+6]
-		acc[o+7] += col[o+7]
-		acc[o+8] += col[o+8]
-		acc[o+9] += col[o+9]
-		acc[o+10] += col[o+10]
-		acc[o+11] += col[o+11]
-		acc[o+12] += col[o+12]
-		acc[o+13] += col[o+13]
-		acc[o+14] += col[o+14]
-		acc[o+15] += col[o+15]
+// Add incrementally adds a feature. NOTE: only using Add() is incorrect
+// since no bias is added -- Reset() (or RefreshAll) must run first.
+func (acc *Accumulator) Add(net *Network, feature uint16, perspective uint8) {
+	col := net.FeatureCols[feature]
+	a := acc.Values[perspective]
+	for o := 0; o < len(a); o += 16 {
+		a[o] += col[o]
+		a[o+1] += col[o+1]
+		a[o+2] += col[o+2]
+		a[o+3] += col[o+3]
+		a[o+4] += col[o+4]
+		a[o+5] += col[o+5]
+		a[o+6] += col[o+6]
+		a[o+7] += col[o+7]
+		a[o+8] += col[o+8]
+		a[o+9] += col[o+9]
+		a[o+10] += col[o+10]
+		a[o+11] += col[o+11]
+		a[o+12] += col[o+12]
+		a[o+13] += col[o+13]
+		a[o+14] += col[o+14]
+		a[o+15] += col[o+15]
 	}
 }
 
-// incrementally remove a feature
-func (nnue *NNUE) Remove(feature uint16, perspective uint8) {
-	col := nnue.FeatureCols[feature]
-	acc := nnue.Acc.Values[perspective]
-	for o := 0; o < len(acc); o += 16 {
-		acc[o] -= col[o]
-		acc[o+1] -= col[o+1]
-		acc[o+2] -= col[o+2]
-		acc[o+3] -= col[o+3]
-		acc[o+4] -= col[o+4]
-		acc[o+5] -= col[o+5]
-		acc[o+6] -= col[o+6]
-		acc[o+7] -= col[o+7]
-		acc[o+8] -= col[o+8]
-		acc[o+9] -= col[o+9]
-		acc[o+10] -= col[o+10]
-		acc[o+11] -= col[o+11]
-		acc[o+12] -= col[o+12]
-		acc[o+13] -= col[o+13]
-		acc[o+14] -= col[o+14]
-		acc[o+15] -= col[o+15]
+// Remove incrementally removes a feature.
+func (acc *Accumulator) Remove(net *Network, feature uint16, perspective uint8) {
+	col := net.FeatureCols[feature]
+	a := acc.Values[perspective]
+	for o := 0; o < len(a); o += 16 {
+		a[o] -= col[o]
+		a[o+1] -= col[o+1]
+		a[o+2] -= col[o+2]
+		a[o+3] -= col[o+3]
+		a[o+4] -= col[o+4]
+		a[o+5] -= col[o+5]
+		a[o+6] -= col[o+6]
+		a[o+7] -= col[o+7]
+		a[o+8] -= col[o+8]
+		a[o+9] -= col[o+9]
+		a[o+10] -= col[o+10]
+		a[o+11] -= col[o+11]
+		a[o+12] -= col[o+12]
+		a[o+13] -= col[o+13]
+		a[o+14] -= col[o+14]
+		a[o+15] -= col[o+15]
 	}
 }
 
-func (nnue *NNUE) Evaluate(side uint8) float32 {
-	ourAcc := nnue.Acc.Values[side]
-	theirAcc := nnue.Acc.Values[1-side]
+func (acc *Accumulator) Evaluate(net *Network, side uint8) float32 {
+	ourAcc := acc.Values[side]
+	theirAcc := acc.Values[1-side]
 	var result float32 = 0.0
 
 	// ReLU before output layer
-	for i := 0; i < nnue.L1; i++ {
-		result += nnue.WOutput[i] * max(ourAcc[i], 0.0)
+	for i := 0; i < net.L1; i++ {
+		result += net.WOutput[i] * max(ourAcc[i], 0.0)
 	}
-	for j := 0; j < nnue.L1; j++ {
-		result += nnue.WOutput[nnue.L1+j] * max(theirAcc[j], 0.0)
+	for j := 0; j < net.L1; j++ {
+		result += net.WOutput[net.L1+j] * max(theirAcc[j], 0.0)
 	}
-	result += nnue.BOutput
+	result += net.BOutput
 	return result
 }
