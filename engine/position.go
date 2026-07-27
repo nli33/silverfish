@@ -70,6 +70,17 @@ func StartingPosition() Position {
 	return FromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 }
 
+// Clone returns a deep copy. Position must not be copied by plain assignment
+// (`p2 := p1` / passing by value) -- Acc and History alias mutable state via
+// slices, so a plain copy shares them with the original. Net is the sole
+// exception: it's immutable, so sharing the pointer is safe.
+func (pos *Position) Clone() Position {
+	clone := *pos
+	clone.Acc = pos.Acc.Clone()
+	clone.History = append([]State(nil), pos.History...)
+	return clone
+}
+
 func (pos *Position) PutPiece(sq Square, piece uint8, color uint8) {
 	sqBB := Bitboard(1 << sq)
 	pos.Pieces[color][piece] |= sqBB

@@ -19,7 +19,7 @@ func TestSearchInvariants(t *testing.T) {
 		MaxDepth:  3,
 		TimeLimit: engine.InfiniteMovetime,
 	}
-	search.Init(pos)
+	search.Init(&pos)
 
 	_, bestMove := search.Search()
 
@@ -47,7 +47,7 @@ func TestSearchReproducible(t *testing.T) {
 			MaxDepth:  3,
 			TimeLimit: engine.InfiniteMovetime,
 		}
-		search.Init(pos)
+		search.Init(&pos)
 		return search.Search()
 	}
 
@@ -76,7 +76,7 @@ func TestSearchFindsMateInOne(t *testing.T) {
 				MaxDepth:  2,
 				TimeLimit: 4 * time.Second,
 			}
-			search.Init(pos)
+			search.Init(&pos)
 
 			score, bestMove := search.Search()
 			if score < engine.Infinity-10 {

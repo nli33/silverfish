@@ -79,8 +79,8 @@ func OrderMoves(pos *Position, moveList *MoveList) {
 	}
 }
 
-func (search *Search) Init(pos Position) {
-	search.Pos = pos
+func (search *Search) Init(pos *Position) {
+	search.Pos = pos.Clone()
 }
 
 // based on negamax (flip sign), each player maximizes their own score

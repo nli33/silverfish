@@ -58,7 +58,7 @@ func executeGoCommand(channel chan bool, position *engine.Position, command *eng
 		MaxDepth:  depth,
 		TimeLimit: moveTime,
 	}
-	search.Init(*position)
+	search.Init(position)
 
 	var bestMove engine.Move
 	_, bestMove = search.Search()
@@ -127,7 +127,7 @@ mainloop:
 			case engine.UciIsReadyClientMessage:
 				engine.UciReadyOk()
 			case engine.UciPositionClientMessage:
-				position = *message.Position
+				position = message.Position.Clone()
 			case engine.UciQuitClientMessage:
 				break mainloop
 			case engine.UciGoClientMessage:

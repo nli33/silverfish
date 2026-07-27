@@ -446,3 +446,25 @@ func TestDoUndo(t *testing.T) {
 		fmt.Println("Got: " + pos.ToFEN())
 	}
 }
+
+// Clone must deep-copy the accumulator and history, not just alias them --
+// otherwise mutating the clone (via DoMove) corrupts the original.
+func TestCloneIsIndependent(t *testing.T) {
+	orig := engine.FromFEN("r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3")
+	origEval := engine.Evaluate(&orig)
+	origFEN := orig.ToFEN()
+	origHistoryLen := len(orig.History)
+
+	clone := orig.Clone()
+	clone.DoMove(engine.NewMoveFromStr("f1c4"))
+
+	if orig.ToFEN() != origFEN {
+		t.Errorf("cloning and mutating the clone changed the original position: before %q, after %q", origFEN, orig.ToFEN())
+	}
+	if got := engine.Evaluate(&orig); got != origEval {
+		t.Errorf("original eval changed after mutating the clone: before %d, after %d", origEval, got)
+	}
+	if len(orig.History) != origHistoryLen {
+		t.Errorf("original History grew after DoMove on the clone: before %d, after %d", origHistoryLen, len(orig.History))
+	}
+}
