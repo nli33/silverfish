@@ -1,7 +1,3 @@
-# No easy way to test these, so only kept as "manual inspection" tests locally
-evaluation_test.go
-search_test.go
-
 # various .nnue models (alternative models or models for testing)
 models/
 

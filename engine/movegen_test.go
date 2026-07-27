@@ -391,7 +391,3 @@ func TestCastlingMoves(t *testing.T) {
 		fmt.Println()
 	}
 }
-
-func init() {
-	engine.InitBitboard()
-}
