@@ -152,3 +152,34 @@ func TestIsRepetitionBoundedByIrreversibleMove(t *testing.T) {
 		t.Errorf("false-positive repetition across an irreversible (pawn) move")
 	}
 }
+
+// Guards against a real historical bug (the dead `tt` branch): its
+// InitZobrist only seeded PieceSqKeys rows 0-5, leaving black's rows (6-11)
+// permanently zero, so every black piece contributed nothing to the hash
+// and positions differing only in black's material/placement hashed
+// identically. The incremental-vs-from-scratch test above can't catch this
+// (it would still agree with itself even if every key were zero), so this
+// checks the property that actually matters for a transposition table: no
+// key is zero, and two positions differing only in a black piece hash
+// differently.
+func TestZobristKeysAreNonZeroAndDistinctForBlackPieces(t *testing.T) {
+	for piece := 0; piece < 12; piece++ {
+		for sq := engine.SquareA1; sq <= engine.SquareH8; sq++ {
+			if engine.PieceSqKeys[piece][sq] == 0 {
+				t.Fatalf("PieceSqKeys[%d][%d] is zero (uninitialized key)", piece, sq)
+			}
+		}
+	}
+
+	withBlackKnight := engine.FromFEN("4k3/8/8/8/8/8/8/n3K3 w - - 0 1")
+	withoutBlackKnight := engine.FromFEN("4k3/8/8/8/8/8/8/4K3 w - - 0 1")
+	if withBlackKnight.Hash == withoutBlackKnight.Hash {
+		t.Fatalf("positions differing only by a black knight hash identically (%x)", withBlackKnight.Hash)
+	}
+
+	blackKnightA1 := engine.FromFEN("4k3/8/8/8/8/8/8/n3K3 w - - 0 1")
+	blackKnightH1 := engine.FromFEN("4k3/8/8/8/8/8/8/4K2n w - - 0 1")
+	if blackKnightA1.Hash == blackKnightH1.Hash {
+		t.Fatalf("a black knight on different squares hashes identically (%x)", blackKnightA1.Hash)
+	}
+}
