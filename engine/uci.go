@@ -7,43 +7,12 @@ import (
 	"strings"
 )
 
-const (
-	UciInitialState = iota
-	UciIdleState
-	UciActiveState
-	UciPingState
-	UciHaltState
-	UciSyncState
-)
-
 type UciGoMessage struct {
 	// When true, the engine should search infinitely
 	Infinite bool
 
 	// When true, the engine should perform perft
 	Perft bool
-
-	// A collection of moves to which the engine should restrict its
-	// consideration (in other words, the move reported with the bestmove
-	// message should be one of the moves in this collection),
-	SearchMoves []Move
-
-	// Remember - 0 indicates that it was not specified.
-	// Hopefully this doesn't bite us in the ass
-
-	// An indication that the engine should attempt to prove
-	// a mate in this many full moves (or twice this many plies) and may
-	// assume that it does not need to examine lines beyond this many full
-	// moves (or twice this many plies)
-	Mate int16
-
-	// Time limits (read spec for information. The one we are referencing
-	// has information about this on Page 14.)
-	WhiteTime          int16
-	BlackTime          int16
-	WhiteClockIncrease int16
-	BlackClockIncrease int16
-	MovesToGo          int16
 
 	// For traditional α/β engines, the maximum length in ply
 	// of the principal variation (before extensions and reductions have been
@@ -56,10 +25,6 @@ type UciGoMessage struct {
 	BTime int32
 	WInc  int32
 	BInc  int32
-
-	// For traditional engines, the maximum number of positions (counted with
-	// multiplicity) that the engine should examine,
-	Nodes int16
 }
 
 // I'm too lazy to copy and paste documentation for every single
@@ -86,34 +51,62 @@ const (
 	UciIsReadyClientMessage
 	UciQuitClientMessage
 	UciStopClientMessage
+	UciSetOptionClientMessage
 )
+
+// EvalFileDefaultLabel is the sentinel value UCI GUIs are expected to send
+// back (or that engines print as the `default`) to mean "use the network
+// built into the binary", matching the convention used by Stockfish's
+// EvalFile option.
+const EvalFileDefaultLabel = "<empty>"
+
+type UciSetOptionMessage struct {
+	Name  string
+	Value string
+}
+
+// uciProcessSetOptionMessage parses the remainder of a "setoption name <name>
+// [value <value>]" command (with "setoption " already trimmed). Splits on
+// the literal " value " rather than tokenizing on whitespace, since both the
+// option name and its value (e.g. a file path) may contain spaces.
+func uciProcessSetOptionMessage(message string) UciSetOptionMessage {
+	message = strings.TrimPrefix(message, "name ")
+
+	if idx := strings.Index(message, " value "); idx != -1 {
+		return UciSetOptionMessage{
+			Name:  strings.TrimSpace(message[:idx]),
+			Value: message[idx+len(" value "):],
+		}
+	}
+	return UciSetOptionMessage{Name: strings.TrimSpace(message)}
+}
 
 type UciClientMessage struct {
 	Position    *Position
 	GoMessage   *UciGoMessage
+	SetOption   *UciSetOptionMessage
 	MessageType uint8
-}
-
-var UciState = UciInitialState
-
-type UciErrorType struct {
-	err string
-}
-
-func NewUciError(err string) *UciErrorType {
-	return &UciErrorType{
-		err: err,
-	}
-}
-
-func (err *UciErrorType) Error() string {
-	return err.err
 }
 
 func uciProcessGoMessage(message string) UciGoMessage {
 	result := UciGoMessage{}
 
 	tokens := strings.Split(message, " ")
+
+	// intArg returns the integer following tokens[i], or ok=false if it's
+	// missing (i is the last token) or not a valid integer.
+	intArg := func(i int) (int, bool) {
+		if i+1 >= len(tokens) {
+			UciError(fmt.Sprintf("missing argument for %q", tokens[i]))
+			return 0, false
+		}
+		value, err := strconv.Atoi(tokens[i+1])
+		if err != nil {
+			UciError(fmt.Sprintf("invalid argument for %q: %q", tokens[i], tokens[i+1]))
+			return 0, false
+		}
+		return value, true
+	}
 
 	for i, token := range tokens {
 		switch token {
@@ -122,43 +115,30 @@ func uciProcessGoMessage(message string) UciGoMessage {
 		case "perft":
 			result.Perft = true
 		case "depth":
-			depth, err := strconv.Atoi(tokens[i+1])
-			if err != nil {
-				UciError("something unknown")
+			if depth, ok := intArg(i); ok {
+				result.Depth = int16(depth)
 			}
-			result.Depth = int16(depth)
 		case "movetime":
-			movetime, err := strconv.Atoi(tokens[i+1])
-			if err != nil {
-				UciError("something unknown")
+			if movetime, ok := intArg(i); ok {
+				result.Movetime = int32(movetime)
 			}
-			result.Movetime = int32(movetime)
 		case "wtime":
-			wtime, err := strconv.Atoi(tokens[i+1])
-			if err != nil {
-				UciError("something unknown")
+			if wtime, ok := intArg(i); ok {
+				result.WTime = int32(wtime)
 			}
-			result.WTime = int32(wtime)
 		case "btime":
-			btime, err := strconv.Atoi(tokens[i+1])
-			if err != nil {
-				UciError("something unknown")
+			if btime, ok := intArg(i); ok {
+				result.BTime = int32(btime)
 			}
-			result.BTime = int32(btime)
 		case "winc":
-			winc, err := strconv.Atoi(tokens[i+1])
-			if err != nil {
-				UciError("something unknown")
+			if winc, ok := intArg(i); ok {
+				result.WInc = int32(winc)
 			}
-			result.WInc = int32(winc)
 		case "binc":
-			binc, err := strconv.Atoi(tokens[i+1])
-			if err != nil {
-				UciError("something unknown")
+			if binc, ok := intArg(i); ok {
+				result.BInc = int32(binc)
 			}
-			result.BInc = int32(binc)
 		}
-
 	}
 
 	return result
@@ -227,6 +207,11 @@ func UciProcessClientMessage(stdin *bufio.Scanner) UciClientMessage {
 	} else if textMessage == "stop" {
 		message.MessageType = UciStopClientMessage
 		return message
+	} else if strings.HasPrefix(textMessage, "setoption") {
+		opt := uciProcessSetOptionMessage(strings.TrimPrefix(textMessage, "setoption "))
+		message.SetOption = &opt
+		message.MessageType = UciSetOptionClientMessage
+		return message
 	}
 
 	// Just return the empty message at this point
@@ -291,8 +276,8 @@ func UciSetEngineName(name string) {
 	fmt.Printf("id name %s\n", name)
 }
 
-// Normally, one should just use protocol 2, as that is the protocol that I am
-// implementing.
-func UciSetProtocol(protocol uint8) {
-	fmt.Printf("protocol %d\n", protocol)
+// UciOptions prints the engine's supported `option` lines. Should be sent
+// after `id`/before `uciok`, per the UCI spec.
+func UciOptions() {
+	fmt.Printf("option name EvalFile type string default %s\n", EvalFileDefaultLabel)
 }
