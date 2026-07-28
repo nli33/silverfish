@@ -98,6 +98,8 @@ func (search *Search) Search() (int32, Move) {
 	search.StartTime = time.Now()
 
 	moveList := GenMoves(&search.Pos, BB_Full)
+	ScoreMoves(&search.Pos, &moveList)
+	OrderMoves(&search.Pos, &moveList)
 
 	for depth := 1; depth <= search.MaxDepth; depth++ {
 		alpha := -Infinity
