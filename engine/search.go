@@ -107,6 +107,27 @@ func OrderMoves(pos *Position, moveList *MoveList) {
 	}
 }
 
+// orderMoveFirst swaps the move matching target to the front of moveList,
+// if present. Move's top 16 bits are a mutable score field the TT never
+// stores, so target is compared on its low 16 bits only. A target of 0 or
+// one that doesn't match any generated move (a stale or index-collided TT
+// entry, or a move that's simply no longer legal here) is a safe no-op --
+// this only ever reorders, it's never relied on for correctness.
+func orderMoveFirst(moveList *MoveList, target Move) {
+	if target == 0 {
+		return
+	}
+	target &= 0xffff
+	for i := uint8(0); i < moveList.Count; i++ {
+		if moveList.Moves[i]&0xffff == target {
+			if i != 0 {
+				moveList.Moves[0], moveList.Moves[i] = moveList.Moves[i], moveList.Moves[0]
+			}
+			return
+		}
+	}
+}
+
 func (search *Search) Init(pos *Position) {
 	search.Pos = pos.Clone()
 }
@@ -129,6 +150,14 @@ func (search *Search) Search() (int32, Move) {
 	for depth := 1; depth <= search.MaxDepth; depth++ {
 		alpha := -Infinity
 		beta := Infinity
+
+		// Put the previous iteration's best move (stored by this same loop,
+		// one depth ago) first -- gives PV-move-first ordering across
+		// iterative-deepening iterations, not just within a single
+		// alphaBetaInner call.
+		if entry, ok := TTProbe(search.Pos.Hash); ok {
+			orderMoveFirst(&moveList, entry.Move)
+		}
 
 		bestScoreCurr := -Infinity
 		var bestMoveCurr Move
@@ -173,6 +202,14 @@ func (search *Search) Search() (int32, Move) {
 			if bestMoveCurr != Move(0) {
 				bestScore = bestScoreCurr
 				bestMove = bestMoveCurr
+
+				// Only a fully-completed depth's result is trustworthy
+				// enough to mark Exact (a timed-out partial pass didn't
+				// finish comparing every root move). Stored so the next
+				// iteration's probe above can order this move first.
+				if !timedOut {
+					TTStore(search.Pos.Hash, bestMove, ScoreToTT(bestScore, 0), depth, BoundExact)
+				}
 
 				// Reported once per completed depth, with that depth's own
 				// final score -- not per move, and not a stale score left
@@ -281,10 +318,29 @@ func (search *Search) alphaBetaInner(alpha, beta int32, depth int, ply int) int3
 		return 0
 	}
 
+	alphaOrig := alpha
+
+	var ttMove Move
+	if entry, ok := TTProbe(search.Pos.Hash); ok {
+		ttMove = entry.Move
+		if int(entry.Depth) >= depth {
+			s := ScoreFromTT(entry.Score, ply)
+			switch {
+			case entry.Bound == BoundExact:
+				return s
+			case entry.Bound == BoundLower && s >= beta:
+				return s
+			case entry.Bound == BoundUpper && s <= alpha:
+				return s
+			}
+		}
+	}
+
 	moveList := GenMoves(&search.Pos, BB_Full)
 
 	ScoreMoves(&search.Pos, &moveList)
 	OrderMoves(&search.Pos, &moveList)
+	orderMoveFirst(&moveList, ttMove)
 
 	hasLegal := false
 
@@ -304,6 +360,7 @@ func (search *Search) alphaBetaInner(alpha, beta int32, depth int, ply int) int3
 	}
 
 	bestScore := -Infinity
+	var bestMove Move
 	for i := uint8(0); i < moveList.Count; i++ {
 		move := moveList.Moves[i]
 		if !search.Pos.MoveIsLegal(move) {
@@ -316,10 +373,12 @@ func (search *Search) alphaBetaInner(alpha, beta int32, depth int, ply int) int3
 		search.Pos.UndoMove(move)
 
 		if score >= beta {
+			TTStore(search.Pos.Hash, move, ScoreToTT(score, ply), depth, BoundLower)
 			return score
 		}
 		if score > bestScore {
 			bestScore = score
+			bestMove = move
 		}
 		if score > alpha {
 			alpha = score
@@ -349,6 +408,12 @@ func (search *Search) alphaBetaInner(alpha, beta int32, depth int, ply int) int3
 			return 0
 		}
 	}
+
+	bound := BoundExact
+	if bestScore <= alphaOrig {
+		bound = BoundUpper
+	}
+	TTStore(search.Pos.Hash, bestMove, ScoreToTT(bestScore, ply), depth, bound)
 
 	return bestScore
 }

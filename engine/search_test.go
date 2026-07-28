@@ -317,6 +317,35 @@ func TestSearchPrefersFasterMate(t *testing.T) {
 	}
 }
 
+// Mate scores are ply-relative, so a TT entry storing one must be re-based
+// (via ScoreToTT/ScoreFromTT) when reused from a different ply -- otherwise
+// the reported mate distance corrupts. This runs a known mate-in-1 across
+// several MaxDepths so the position is reached, cached, and reprobed at
+// different plies (and iterations) within iterative-deepening searches,
+// and checks the move found is still an immediate, genuine checkmate every
+// time -- not just a mate-scored move that happens to not actually mate,
+// which is exactly what a corrupted ply rebasing would produce.
+func TestSearchMateDistanceCorrectThroughTT(t *testing.T) {
+	engine.ClearTT()
+
+	fen := "6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1" // mate in 1 (Ra8#)
+	for _, maxDepth := range []int{2, 3, 4, 5} {
+		pos := engine.FromFEN(fen)
+		search := engine.Search{MaxDepth: maxDepth, TimeLimit: 4 * time.Second}
+		search.Init(&pos)
+
+		score, bestMove := search.Search()
+		if score < engine.Infinity-10 {
+			t.Fatalf("MaxDepth=%d: score = %d, want a mate score near +Infinity", maxDepth, score)
+		}
+
+		pos.DoMove(bestMove)
+		if len(pos.LegalMoves()) != 0 || pos.Checkers(pos.Turn) == 0 {
+			t.Errorf("MaxDepth=%d: move %s is not checkmate (mate distance likely corrupted by a stale TT ply)", maxDepth, bestMove.ToString())
+		}
+	}
+}
+
 // A free, undefended piece with no counterplay must be captured by any
 // correct search -- independent of eval tuning, since forfeiting it is a
 // clear material loss under any reasonable evaluation.
