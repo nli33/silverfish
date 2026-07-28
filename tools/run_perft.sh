@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 
-make build
+ENGINE="${1:-./bin/silverfish}"
+if [[ -z "$1" ]]; then
+  make build
+fi
 
-ENGINE="./bin/silverfish"
+now() { python3 -c 'import time; print(time.time())'; }
 
 tests=( # fen:depth:ans
   "startpos:5:4865609"
@@ -19,11 +22,32 @@ for test in "${tests[@]}"; do
   DEPTH="${REMAINDER%%:*}"
   EXPECTED="${REMAINDER##*:}"
 
-  OUTPUT=$(
-    printf "uci\nposition %s\ngo perft depth %d\n" "$POSITION" "$DEPTH" \
-    | $ENGINE 2>/dev/null \
-    | awk -F'Perft result: ' '/Perft result:/ { print $2; exit }'
-  )
+  # The engine has no "exit on EOF" path (a separate, pre-existing UCI bug),
+  # so the pipe below never closes on its own -- feed it, poll the output
+  # file for the result line (bounded, so a hung/crashed engine can't wedge
+  # this script forever), then kill the engine PID explicitly instead of
+  # waiting on it to exit by itself.
+  OUTFILE=$(mktemp)
+  START=$(now)
+  printf "uci\nposition %s\ngo perft depth %d\n" "$POSITION" "$DEPTH" | $ENGINE >"$OUTFILE" 2>/dev/null &
+  ENGINE_PID=$!
+
+  POLL_TIMEOUT_S=600
+  OUTPUT=""
+  for ((i = 0; i < POLL_TIMEOUT_S * 10; i++)); do
+    LINE=$(awk -F'Perft result: ' '/Perft result:/ { print $2; exit }' "$OUTFILE" 2>/dev/null)
+    if [[ -n "$LINE" ]]; then
+      OUTPUT="$LINE"
+      break
+    fi
+    sleep 0.1
+  done
+  END=$(now)
+
+  kill "$ENGINE_PID" 2>/dev/null
+  wait "$ENGINE_PID" 2>/dev/null
+  rm -f "$OUTFILE"
+  ELAPSED=$(python3 -c "print(f'{$END - $START:.3f}')")
 
   if [[ ${#POSITION} -gt 30 ]]; then
     DISPLAY_POS="${POSITION:0:30}..."
@@ -36,9 +60,11 @@ for test in "${tests[@]}"; do
     continue
   fi
 
+  NPS=$(python3 -c "print(int($OUTPUT / $ELAPSED)) if $ELAPSED > 0 else print('n/a')")
+
   if [[ "$OUTPUT" -eq "$EXPECTED" ]]; then
-    echo "PASS: [${DISPLAY_POS}] @ depth $DEPTH → $OUTPUT"
+    echo "PASS: [${DISPLAY_POS}] @ depth $DEPTH → $OUTPUT (${ELAPSED}s, ${NPS} nps)"
   else
-    echo "FAIL: [${DISPLAY_POS}] @ depth $DEPTH → got $OUTPUT but expected $EXPECTED"
+    echo "FAIL: [${DISPLAY_POS}] @ depth $DEPTH → got $OUTPUT but expected $EXPECTED (${ELAPSED}s)"
   fi
 done
