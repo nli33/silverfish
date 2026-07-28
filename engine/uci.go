@@ -52,6 +52,7 @@ const (
 	UciQuitClientMessage
 	UciStopClientMessage
 	UciSetOptionClientMessage
+	UciNewGameClientMessage
 )
 
 // EvalFileDefaultLabel is the sentinel value UCI GUIs are expected to send
@@ -211,6 +212,9 @@ func UciProcessClientMessage(stdin *bufio.Scanner) UciClientMessage {
 		opt := uciProcessSetOptionMessage(strings.TrimPrefix(textMessage, "setoption "))
 		message.SetOption = &opt
 		message.MessageType = UciSetOptionClientMessage
+		return message
+	} else if textMessage == "ucinewgame" {
+		message.MessageType = UciNewGameClientMessage
 		return message
 	}
 
