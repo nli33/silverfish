@@ -108,7 +108,12 @@ func (pos *Position) PutPiecesBB(pieces [2][6]Bitboard) {
 	}
 
 	for sq := SquareA1; sq <= SquareH8; sq++ {
-		pos.RemovePiece(sq)
+		// RemovePiece panics on an already-empty square (NoColor indexes
+		// pos.Sides out of bounds), so only call it where there's something
+		// to remove -- relevant when reusing the same Position across calls.
+		if pos.Board[sq] != NoPiece {
+			pos.RemovePiece(sq)
+		}
 		for piece := Pawn; piece <= King; piece++ {
 			for color := White; color <= Black; color++ {
 				if pieces[color][piece]&(1<<sq) != 0 {
