@@ -9,6 +9,31 @@ const InfiniteMovetime = 600000 * time.Millisecond // arbitrary large number for
 const MaxMovetime = 2000                           // max movetime for any move if unspecified
 const MaxQuiescenceDepth = 8
 
+// MateScoreThreshold: any score at least this close to Infinity is a mate
+// score (see the mate-distance comment on alphaBetaInner), not a real
+// evaluation -- real evaluations never get remotely close to Infinity.
+const MateScoreThreshold = Infinity - 10000
+
+// mateInfo reports whether score is a forced-mate score and, if so, converts
+// it to UCI's "score mate N" convention: N is moves (not plies) to mate,
+// positive if the engine's side delivers it and negative if it's being
+// mated.
+func mateInfo(score int32) (movesToMate int32, isMate bool) {
+	abs := score
+	if abs < 0 {
+		abs = -abs
+	}
+	if abs < MateScoreThreshold {
+		return 0, false
+	}
+	pliesToMate := Infinity - abs
+	movesToMate = (pliesToMate + 1) / 2
+	if score < 0 {
+		movesToMate = -movesToMate
+	}
+	return movesToMate, true
+}
+
 type Search struct {
 	Pos   Position
 	Nodes int
@@ -98,6 +123,8 @@ func (search *Search) Search() (int32, Move) {
 	search.StartTime = time.Now()
 
 	moveList := GenMoves(&search.Pos, BB_Full)
+	ScoreMoves(&search.Pos, &moveList)
+	OrderMoves(&search.Pos, &moveList)
 
 	for depth := 1; depth <= search.MaxDepth; depth++ {
 		alpha := -Infinity
@@ -105,6 +132,7 @@ func (search *Search) Search() (int32, Move) {
 
 		bestScoreCurr := -Infinity
 		var bestMoveCurr Move
+		timedOut := false
 
 		for i := uint8(0); i < moveList.Count; i++ {
 			move := moveList.Moves[i]
@@ -116,10 +144,6 @@ func (search *Search) Search() (int32, Move) {
 			score := -search.alphaBetaInner(-beta, -alpha, depth-1, 1)
 			search.Pos.UndoMove(move)
 
-			if time.Since(search.StartTime) > search.TimeLimit {
-				break
-			}
-
 			// ensure a null move is not chosen (in case of unavoidable checkmate)
 			if score > bestScoreCurr || bestMoveCurr == Move(0) {
 				bestScoreCurr = score
@@ -129,42 +153,81 @@ func (search *Search) Search() (int32, Move) {
 				alpha = score
 			}
 
-			UciInfo(UciInfoMessage{
-				depth:    depth,
-				hasDepth: true,
-				score:    bestScore,
-				hasScore: true,
-				nodes:    search.Nodes,
-				hasNodes: true,
-			})
+			if time.Since(search.StartTime) > search.TimeLimit {
+				timedOut = true
+				break
+			}
 		}
 
-		if time.Since(search.StartTime) > search.TimeLimit {
+		// A depth that fully explored every root move is strictly better
+		// information than any previous (shallower) depth, so always trust
+		// it. A depth that timed out partway through only checked some
+		// prefix of the (move-ordered, but not perfectly) root list -- if we
+		// already have a complete result from a previous depth, that result
+		// is more reliable than this partial one and must NOT be
+		// overwritten. The only time a partial result is used is when there
+		// is nothing else yet at all (typically depth 1 timing out before
+		// its first move even finishes) -- a partial answer beats returning
+		// an illegal null move.
+		if !timedOut || bestMove == Move(0) {
+			if bestMoveCurr != Move(0) {
+				bestScore = bestScoreCurr
+				bestMove = bestMoveCurr
+
+				// Reported once per completed depth, with that depth's own
+				// final score -- not per move, and not a stale score left
+				// over from the previous depth.
+				infoScore := bestScore
+				movesToMate, isMate := mateInfo(bestScore)
+				if isMate {
+					infoScore = movesToMate
+				}
+				UciInfo(UciInfoMessage{
+					depth:    depth,
+					hasDepth: true,
+					score:    infoScore,
+					hasScore: true,
+					isMate:   isMate,
+					nodes:    search.Nodes,
+					hasNodes: true,
+				})
+			}
+		}
+
+		if timedOut {
 			break
 		}
-
-		bestScore = bestScoreCurr
-		bestMove = bestMoveCurr
 	}
 
 	return bestScore, bestMove
 }
 
-func (search *Search) Quiescence(alpha, beta int32, qdepth int) int32 {
+// ply mirrors alphaBetaInner's ply: the number of plies from the search
+// root, needed so a checkmate found here scores consistently with one found
+// in alphaBetaInner (see the mate-distance comment there).
+func (search *Search) Quiescence(alpha, beta int32, qdepth int, ply int) int32 {
 	if qdepth > MaxQuiescenceDepth {
 		return Evaluate(&search.Pos)
 	}
 
-	standPat := Evaluate(&search.Pos)
-	if standPat >= beta {
-		return beta
-	}
-	if standPat > alpha {
-		alpha = standPat
+	inCheck := search.Pos.Checkers(search.Pos.Turn) != 0
+
+	// Unlike a capture, check can't be declined -- taking a stand-pat floor
+	// while in check can hide that the position is actually lost (or won)
+	// tactically, so it's skipped entirely here; every evasion must be
+	// searched instead.
+	if !inCheck {
+		standPat := Evaluate(&search.Pos)
+		if standPat >= beta {
+			return beta
+		}
+		if standPat > alpha {
+			alpha = standPat
+		}
 	}
 
 	var moveList MoveList
-	if search.Pos.Checkers(search.Pos.Turn) != 0 {
+	if inCheck {
 		moveList = GenMoves(&search.Pos, BB_Full)
 	} else {
 		moveList = GenMoves(&search.Pos, search.Pos.Sides[search.Pos.Turn^1]) // only captures
@@ -173,16 +236,18 @@ func (search *Search) Quiescence(alpha, beta int32, qdepth int) int32 {
 	ScoreMoves(&search.Pos, &moveList)
 	OrderMoves(&search.Pos, &moveList)
 
+	hasLegal := false
 	for i := uint8(0); i < moveList.Count; i++ {
 		move := moveList.Moves[i]
 		if !search.Pos.MoveIsLegal(move) {
 			continue
 		}
+		hasLegal = true
 
 		search.Nodes++
 
 		search.Pos.DoMove(move)
-		score := -search.Quiescence(-beta, -alpha, qdepth+1)
+		score := -search.Quiescence(-beta, -alpha, qdepth+1, ply+1)
 		search.Pos.UndoMove(move)
 
 		if score >= beta {
@@ -191,6 +256,12 @@ func (search *Search) Quiescence(alpha, beta int32, qdepth int) int32 {
 		if score > alpha {
 			alpha = score
 		}
+	}
+
+	// Running out of captures just means "stand pat" (handled above), but
+	// running out of legal evasions while in check is checkmate.
+	if inCheck && !hasLegal {
+		return -(Infinity - int32(ply))
 	}
 
 	return alpha
@@ -222,7 +293,7 @@ func (search *Search) alphaBetaInner(alpha, beta int32, depth int, ply int) int3
 
 	if depth == 0 {
 		// return Evaluate(pos)
-		return search.Quiescence(alpha, beta, 0)
+		return search.Quiescence(alpha, beta, 0, ply)
 	}
 
 	bestScore := -Infinity
@@ -248,13 +319,16 @@ func (search *Search) alphaBetaInner(alpha, beta int32, depth int, ply int) int3
 		}
 
 		if search.Nodes&32767 == 0 {
+			// No score here: bestScore is this internal node's own
+			// negamax-local value, not the root-relative evaluation UCI's
+			// `score` field is supposed to report -- nodes/depth are the
+			// only legitimate "still working" signal available this deep in
+			// the tree.
 			UciInfo(UciInfoMessage{
 				depth:    depth,
 				hasDepth: true,
 				nodes:    search.Nodes,
 				hasNodes: true,
-				score:    bestScore,
-				hasScore: true,
 			})
 		}
 	}
