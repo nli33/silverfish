@@ -38,21 +38,24 @@ func TimeLimit(pos *Position, command *UciGoMessage) time.Duration {
 	return min(MaxMovetime, time.Duration(ourTime/int32(estimatedMovesLeft)+ourInc/4))
 }
 
+// Indexed by the real piece constants (Pawn=0, Knight=1, Bishop=2, Rook=3,
+// Queen=4, King=5, NoPiece=6) on both axes. Row = victim, column = attacker;
+// higher score for a more valuable victim taken by a cheaper attacker.
 var MvvLva = [7][7]int{
-	{0, 0, 0, 0, 0, 0, 0},       // victim K, attacker K, Q, R, B, N, P, None
-	{50, 51, 52, 53, 54, 55, 0}, // victim Q, attacker K, Q, R, B, N, P, None
-	{40, 41, 42, 43, 44, 45, 0}, // victim R, attacker K, Q, R, B, N, P, None
-	{30, 31, 32, 33, 34, 35, 0}, // victim B, attacker K, Q, R, B, N, P, None
-	{20, 21, 22, 23, 24, 25, 0}, // victim N, attacker K, Q, R, B, N, P, None
-	{10, 11, 12, 13, 14, 15, 0}, // victim P, attacker K, Q, R, B, N, P, None
-	{0, 0, 0, 0, 0, 0, 0},       // victim None, attacker K, Q, R, B, N, P, None
+	{15, 14, 13, 12, 11, 10, 0}, // victim P, attacker P, N, B, R, Q, K, None
+	{25, 24, 23, 22, 21, 20, 0}, // victim N, attacker P, N, B, R, Q, K, None
+	{35, 34, 33, 32, 31, 30, 0}, // victim B, attacker P, N, B, R, Q, K, None
+	{45, 44, 43, 42, 41, 40, 0}, // victim R, attacker P, N, B, R, Q, K, None
+	{55, 54, 53, 52, 51, 50, 0}, // victim Q, attacker P, N, B, R, Q, K, None
+	{0, 0, 0, 0, 0, 0, 0},       // victim K, attacker P, N, B, R, Q, K, None (should not occur)
+	{0, 0, 0, 0, 0, 0, 0},       // victim None (quiet move)
 }
 
 func ScoreMoves(pos *Position, moveList *MoveList) {
 	for i := 0; i < int(moveList.Count); i++ {
 		move := &moveList.Moves[i]
-		_, victim := pos.GetSquare(move.From())
-		_, attacker := pos.GetSquare(move.To())
+		_, attacker := pos.GetSquare(move.From())
+		_, victim := pos.GetSquare(move.To())
 		value := MvvLva[victim][attacker]
 		move.GiveScore(value)
 	}
@@ -110,7 +113,7 @@ func (search *Search) Search() (int32, Move) {
 			}
 
 			search.Pos.DoMove(move)
-			score := -search.alphaBetaInner(-beta, -alpha, depth-1)
+			score := -search.alphaBetaInner(-beta, -alpha, depth-1, 1)
 			search.Pos.UndoMove(move)
 
 			if time.Since(search.StartTime) > search.TimeLimit {
@@ -193,7 +196,11 @@ func (search *Search) Quiescence(alpha, beta int32, qdepth int) int32 {
 	return alpha
 }
 
-func (search *Search) alphaBetaInner(alpha, beta int32, depth int) int32 {
+// ply is the number of plies from the root of this search (the move passed
+// to alphaBetaInner from Search() is ply 1). Used only to prefer faster
+// mates (and defer forced ones): a mate found at a smaller ply scores
+// strictly higher than the same mate found deeper in the tree.
+func (search *Search) alphaBetaInner(alpha, beta int32, depth int, ply int) int32 {
 	search.Nodes++
 
 	moveList := GenMoves(&search.Pos, BB_Full)
@@ -206,7 +213,7 @@ func (search *Search) alphaBetaInner(alpha, beta int32, depth int) int32 {
 	if moveList.Count == 0 {
 		if search.Pos.Checkers(search.Pos.Turn) != 0 {
 			// checkmate
-			return -Infinity
+			return -(Infinity - int32(ply))
 		} else {
 			// stalemate
 			return 0
@@ -227,7 +234,7 @@ func (search *Search) alphaBetaInner(alpha, beta int32, depth int) int32 {
 		hasLegal = true
 
 		search.Pos.DoMove(move)
-		score := -search.alphaBetaInner(-beta, -alpha, depth-1)
+		score := -search.alphaBetaInner(-beta, -alpha, depth-1, ply+1)
 		search.Pos.UndoMove(move)
 
 		if score >= beta {
@@ -256,7 +263,7 @@ func (search *Search) alphaBetaInner(alpha, beta int32, depth int) int32 {
 	// avoid the case where all moves are illegal (stalemate/checkmate) but moveList.Count != 0
 	if !hasLegal {
 		if search.Pos.Checkers(search.Pos.Turn) != 0 {
-			return -Infinity
+			return -(Infinity - int32(ply))
 		} else {
 			return 0
 		}

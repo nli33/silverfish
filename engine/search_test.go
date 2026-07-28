@@ -91,6 +91,60 @@ func TestSearchFindsMateInOne(t *testing.T) {
 	}
 }
 
+// MVV-LVA move ordering must rank capturing a more valuable piece with a
+// cheaper one above the reverse: PxQ (pawn takes a queen) is a great trade
+// and must outscore QxP (queen takes a pawn), a poor one, even though both
+// are available in the same position.
+func TestScoreMovesRanksCapturesByValue(t *testing.T) {
+	// White pawn e3 attacks the black queen on d4 (PxQ);
+	// white queen h4 attacks the black pawn on g5 (QxP).
+	pos := engine.FromFEN("4k3/8/8/6p1/3q3Q/4P3/8/4K3 w - - 0 1")
+	moveList := engine.GenMoves(&pos, engine.BB_Full)
+	engine.ScoreMoves(&pos, &moveList)
+
+	var pxq, qxp engine.Move
+	for i := uint8(0); i < moveList.Count; i++ {
+		move := moveList.Moves[i]
+		switch {
+		case move.From() == engine.SquareE3 && move.To() == engine.SquareD4:
+			pxq = move
+		case move.From() == engine.SquareH4 && move.To() == engine.SquareG5:
+			qxp = move
+		}
+	}
+	if pxq == engine.Move(0) {
+		t.Fatalf("expected exd4 (PxQ) to be a generated move")
+	}
+	if qxp == engine.Move(0) {
+		t.Fatalf("expected Qxg5 (QxP) to be a generated move")
+	}
+	if pxq.Score() <= qxp.Score() {
+		t.Errorf("PxQ (score %d) should outrank QxP (score %d)", pxq.Score(), qxp.Score())
+	}
+}
+
+// Mate-distance scoring: a forced mate found closer to the root must score
+// strictly higher than the same kind of mate found deeper in the tree, so
+// the engine prefers the faster mate when it has a choice.
+func TestSearchPrefersFasterMate(t *testing.T) {
+	mateIn1 := engine.FromFEN("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1")
+	searchIn1 := engine.Search{MaxDepth: 3, TimeLimit: 4 * time.Second}
+	searchIn1.Init(&mateIn1)
+	scoreIn1, _ := searchIn1.Search()
+
+	mateIn2 := engine.FromFEN("k7/8/2K5/8/8/8/8/7Q w - - 0 1")
+	searchIn2 := engine.Search{MaxDepth: 5, TimeLimit: 4 * time.Second}
+	searchIn2.Init(&mateIn2)
+	scoreIn2, _ := searchIn2.Search()
+
+	if scoreIn1 <= scoreIn2 {
+		t.Errorf("mate-in-1 score (%d) should exceed mate-in-2 score (%d)", scoreIn1, scoreIn2)
+	}
+	if scoreIn2 < engine.Infinity-10 {
+		t.Errorf("mate-in-2 score = %d, want a mate score near +Infinity", scoreIn2)
+	}
+}
+
 // A free, undefended piece with no counterplay must be captured by any
 // correct search -- independent of eval tuning, since forfeiting it is a
 // clear material loss under any reasonable evaluation.
