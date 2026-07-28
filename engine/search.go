@@ -9,6 +9,31 @@ const InfiniteMovetime = 600000 * time.Millisecond // arbitrary large number for
 const MaxMovetime = 2000                           // max movetime for any move if unspecified
 const MaxQuiescenceDepth = 8
 
+// MateScoreThreshold: any score at least this close to Infinity is a mate
+// score (see the mate-distance comment on alphaBetaInner), not a real
+// evaluation -- real evaluations never get remotely close to Infinity.
+const MateScoreThreshold = Infinity - 10000
+
+// mateInfo reports whether score is a forced-mate score and, if so, converts
+// it to UCI's "score mate N" convention: N is moves (not plies) to mate,
+// positive if the engine's side delivers it and negative if it's being
+// mated.
+func mateInfo(score int32) (movesToMate int32, isMate bool) {
+	abs := score
+	if abs < 0 {
+		abs = -abs
+	}
+	if abs < MateScoreThreshold {
+		return 0, false
+	}
+	pliesToMate := Infinity - abs
+	movesToMate = (pliesToMate + 1) / 2
+	if score < 0 {
+		movesToMate = -movesToMate
+	}
+	return movesToMate, true
+}
+
 type Search struct {
 	Pos   Position
 	Nodes int
@@ -107,6 +132,7 @@ func (search *Search) Search() (int32, Move) {
 
 		bestScoreCurr := -Infinity
 		var bestMoveCurr Move
+		timedOut := false
 
 		for i := uint8(0); i < moveList.Count; i++ {
 			move := moveList.Moves[i]
@@ -118,10 +144,6 @@ func (search *Search) Search() (int32, Move) {
 			score := -search.alphaBetaInner(-beta, -alpha, depth-1, 1)
 			search.Pos.UndoMove(move)
 
-			if time.Since(search.StartTime) > search.TimeLimit {
-				break
-			}
-
 			// ensure a null move is not chosen (in case of unavoidable checkmate)
 			if score > bestScoreCurr || bestMoveCurr == Move(0) {
 				bestScoreCurr = score
@@ -131,22 +153,50 @@ func (search *Search) Search() (int32, Move) {
 				alpha = score
 			}
 
-			UciInfo(UciInfoMessage{
-				depth:    depth,
-				hasDepth: true,
-				score:    bestScore,
-				hasScore: true,
-				nodes:    search.Nodes,
-				hasNodes: true,
-			})
+			if time.Since(search.StartTime) > search.TimeLimit {
+				timedOut = true
+				break
+			}
 		}
 
-		if time.Since(search.StartTime) > search.TimeLimit {
+		// A depth that fully explored every root move is strictly better
+		// information than any previous (shallower) depth, so always trust
+		// it. A depth that timed out partway through only checked some
+		// prefix of the (move-ordered, but not perfectly) root list -- if we
+		// already have a complete result from a previous depth, that result
+		// is more reliable than this partial one and must NOT be
+		// overwritten. The only time a partial result is used is when there
+		// is nothing else yet at all (typically depth 1 timing out before
+		// its first move even finishes) -- a partial answer beats returning
+		// an illegal null move.
+		if !timedOut || bestMove == Move(0) {
+			if bestMoveCurr != Move(0) {
+				bestScore = bestScoreCurr
+				bestMove = bestMoveCurr
+
+				// Reported once per completed depth, with that depth's own
+				// final score -- not per move, and not a stale score left
+				// over from the previous depth.
+				infoScore := bestScore
+				movesToMate, isMate := mateInfo(bestScore)
+				if isMate {
+					infoScore = movesToMate
+				}
+				UciInfo(UciInfoMessage{
+					depth:    depth,
+					hasDepth: true,
+					score:    infoScore,
+					hasScore: true,
+					isMate:   isMate,
+					nodes:    search.Nodes,
+					hasNodes: true,
+				})
+			}
+		}
+
+		if timedOut {
 			break
 		}
-
-		bestScore = bestScoreCurr
-		bestMove = bestMoveCurr
 	}
 
 	return bestScore, bestMove
@@ -269,13 +319,16 @@ func (search *Search) alphaBetaInner(alpha, beta int32, depth int, ply int) int3
 		}
 
 		if search.Nodes&32767 == 0 {
+			// No score here: bestScore is this internal node's own
+			// negamax-local value, not the root-relative evaluation UCI's
+			// `score` field is supposed to report -- nodes/depth are the
+			// only legitimate "still working" signal available this deep in
+			// the tree.
 			UciInfo(UciInfoMessage{
 				depth:    depth,
 				hasDepth: true,
 				nodes:    search.Nodes,
 				hasNodes: true,
-				score:    bestScore,
-				hasScore: true,
 			})
 		}
 	}

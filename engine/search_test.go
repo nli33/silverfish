@@ -1,11 +1,67 @@
 package engine_test
 
 import (
+	"bytes"
+	"io"
+	"os"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"silverfish/engine"
 )
+
+// captureStdout redirects os.Stdout for the duration of fn and returns
+// everything written to it -- UciInfo prints directly to stdout, so this is
+// the only way to observe the search-progress messages it emits.
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	old := os.Stdout
+	os.Stdout = w
+
+	fn()
+
+	os.Stdout = old
+	w.Close()
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	return buf.String()
+}
+
+// parseUciInfoLine extracts the fields TestUciInfo* care about from one
+// "info ..." line. hasScore is false for the internal periodic ping, which
+// deliberately omits the score field.
+func parseUciInfoLine(line string) (depth int, score int32, isMate bool, hasScore bool) {
+	fields := strings.Fields(line)
+	for i, f := range fields {
+		switch f {
+		case "depth":
+			if i+1 < len(fields) {
+				d, _ := strconv.Atoi(fields[i+1])
+				depth = d
+			}
+		case "cp":
+			if i+1 < len(fields) {
+				v, _ := strconv.Atoi(fields[i+1])
+				score = int32(v)
+				hasScore = true
+			}
+		case "mate":
+			if i+1 < len(fields) {
+				v, _ := strconv.Atoi(fields[i+1])
+				score = int32(v)
+				hasScore = true
+				isMate = true
+			}
+		}
+	}
+	return
+}
 
 // Structural invariants that must hold regardless of how the evaluation is
 // tuned: the search returns a legal move, doesn't mutate the position it
@@ -34,6 +90,97 @@ func TestSearchInvariants(t *testing.T) {
 	}
 	if search.Nodes == 0 {
 		t.Errorf("Search() explored 0 nodes")
+	}
+}
+
+// Even under a time budget so tight it expires mid-way through the very
+// first iterative-deepening iteration, Search() must still return a legal
+// move -- never the zero-value null move, which would be sent straight to
+// the GUI as an illegal "bestmove".
+func TestSearchTightTimeLimitReturnsLegalMove(t *testing.T) {
+	fen := "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"
+	pos := engine.FromFEN(fen)
+
+	search := engine.Search{
+		MaxDepth:  engine.InfiniteDepth,
+		TimeLimit: 0,
+	}
+	search.Init(&pos)
+
+	_, bestMove := search.Search()
+
+	if bestMove == engine.Move(0) {
+		t.Fatalf("Search() returned a null move under a zero time limit")
+	}
+	if !pos.MoveIsLegal(bestMove) {
+		t.Errorf("Search() returned illegal move %s", bestMove.ToString())
+	}
+}
+
+// A deeper iterative-deepening depth that only partway completes (checked
+// some but not all root moves before the clock ran out) must NOT overwrite
+// a shallower depth that fully completed -- the complete result is strictly
+// more reliable than an incomplete deeper one that may not have reached the
+// true best move yet. Regression test for a real bug: an earlier version of
+// the timeout fix committed any partial progress unconditionally, which at
+// real time controls (where the deepest attempted iteration almost always
+// times out mid-way) made the engine routinely discard a solid, fully-
+// searched shallow result in favor of whatever the first couple of moves at
+// the next depth happened to be -- caught by an SPRT run scoring 0-97 against
+// the pre-fix engine.
+func TestSearchTimeoutKeepsLastFullyCompletedDepth(t *testing.T) {
+	fen := "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"
+
+	runToCompletion := func(maxDepth int) (int32, engine.Move, time.Duration) {
+		pos := engine.FromFEN(fen)
+		search := engine.Search{MaxDepth: maxDepth, TimeLimit: engine.InfiniteMovetime}
+		search.Init(&pos)
+		start := time.Now()
+		score, move := search.Search()
+		return score, move, time.Since(start)
+	}
+
+	wantScore, wantMove, elapsed2 := runToCompletion(2)
+	_, _, elapsed3 := runToCompletion(3)
+
+	if elapsed3 <= elapsed2 {
+		t.Skip("depth 3 didn't take meaningfully longer than depth 2 on this machine; can't construct a reliable partial-depth timeout")
+	}
+	// Comfortably past depth 2's own completion time, but well short of
+	// depth 3's -- gives the timed run room to start depth 3, check a few
+	// moves, and time out mid-way.
+	budget := elapsed2 + (elapsed3-elapsed2)/3
+
+	pos := engine.FromFEN(fen)
+	search := engine.Search{MaxDepth: 8, TimeLimit: budget}
+	search.Init(&pos)
+	gotScore, gotMove := search.Search()
+
+	if gotMove != wantMove || gotScore != wantScore {
+		t.Errorf("timed search (budget %s, between depth-2 %s and depth-3 %s) = (%d, %s), want the fully-completed depth-2 result (%d, %s)",
+			budget, elapsed2, elapsed3, gotScore, gotMove.ToString(), wantScore, wantMove.ToString())
+	}
+}
+
+// Documents (rather than "fixes") the one case where Search() has no legal
+// move to give: a root position that's already checkmate. There's nothing
+// to return here, so this pins down the current, well-defined behavior
+// (null move, -Infinity score) so it doesn't change by accident.
+func TestSearchTerminalRootPositionReturnsNullMove(t *testing.T) {
+	pos := engine.FromFEN("R5k1/5ppp/8/8/8/8/8/6K1 b - - 1 1")
+	search := engine.Search{
+		MaxDepth:  3,
+		TimeLimit: engine.InfiniteMovetime,
+	}
+	search.Init(&pos)
+
+	score, bestMove := search.Search()
+
+	if bestMove != engine.Move(0) {
+		t.Errorf("Search() on a checkmated root = %s, want the null move (no legal move exists)", bestMove.ToString())
+	}
+	if score != -engine.Infinity {
+		t.Errorf("Search() on a checkmated root score = %d, want -Infinity", score)
 	}
 }
 
@@ -184,5 +331,98 @@ func TestSearchCapturesHangingPiece(t *testing.T) {
 	_, bestMove := search.Search()
 	if bestMove.To() != engine.SquareH5 {
 		t.Errorf("Search() = %s, want a move to h5 capturing the undefended queen", bestMove.ToString())
+	}
+}
+
+// UciInfo's search-progress messages must report each completed depth's
+// real score exactly once -- not repeated per root move with a stale value
+// left over from the previous depth (the root-loop bug), and the periodic
+// internal-node progress ping must never carry a score field (that value is
+// a local negamax number from deep in the tree, not the root-relative score
+// UCI's `score` field is supposed to report).
+func TestUciInfoReportsScoreOncePerDepth(t *testing.T) {
+	fen := "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"
+	pos := engine.FromFEN(fen)
+	search := engine.Search{MaxDepth: 4, TimeLimit: engine.InfiniteMovetime}
+	search.Init(&pos)
+
+	var finalScore int32
+	output := captureStdout(t, func() {
+		finalScore, _ = search.Search()
+	})
+
+	seenAtDepth := map[int]int{}
+	sawUnscoredPing := false
+	var lastScore int32
+	var lastDepth int
+
+	for _, line := range strings.Split(output, "\n") {
+		if !strings.HasPrefix(line, "info") {
+			continue
+		}
+		depth, score, isMate, hasScore := parseUciInfoLine(line)
+		if !hasScore {
+			sawUnscoredPing = true
+			continue
+		}
+		if isMate {
+			t.Fatalf("unexpected mate score in a non-mate position: %q", line)
+		}
+		seenAtDepth[depth]++
+		lastScore = score
+		lastDepth = depth
+	}
+
+	for d, count := range seenAtDepth {
+		if count != 1 {
+			t.Errorf("depth %d: got %d scored info lines, want exactly 1", d, count)
+		}
+	}
+	if lastDepth != 4 {
+		t.Errorf("last scored info line was depth %d, want 4 (MaxDepth)", lastDepth)
+	}
+	if lastScore != finalScore {
+		t.Errorf("last scored info line score = %d, want %d (Search()'s returned score)", lastScore, finalScore)
+	}
+	if !sawUnscoredPing {
+		t.Errorf("expected at least one unscored internal-node progress ping (search.Nodes should exceed 32767 at this depth)")
+	}
+}
+
+// A mate score must be reported as UCI's "score mate N" (moves to mate),
+// not "score cp <huge centipawn number>".
+func TestUciInfoReportsMateFormat(t *testing.T) {
+	pos := engine.FromFEN("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1")
+	search := engine.Search{MaxDepth: 2, TimeLimit: 4 * time.Second}
+	search.Init(&pos)
+
+	output := captureStdout(t, func() {
+		search.Search()
+	})
+
+	var lastIsMate bool
+	var lastMateValue int32
+	var sawScoredLine bool
+	for _, line := range strings.Split(output, "\n") {
+		if !strings.HasPrefix(line, "info") {
+			continue
+		}
+		_, score, isMate, hasScore := parseUciInfoLine(line)
+		if !hasScore {
+			continue
+		}
+		sawScoredLine = true
+		lastIsMate = isMate
+		lastMateValue = score
+	}
+
+	if !sawScoredLine {
+		t.Fatalf("no scored info line found in output:\n%s", output)
+	}
+	if !lastIsMate {
+		t.Errorf("mate-in-1 position: last scored info line used score cp, want score mate")
+	}
+	if lastMateValue != 1 {
+		t.Errorf("score mate %d, want score mate 1", lastMateValue)
 	}
 }
