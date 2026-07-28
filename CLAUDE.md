@@ -39,6 +39,18 @@ tools/            → Python/Go helper scripts (visualizers, perft comparison, m
 bin/              → built binaries (various experiment snapshots)
 ```
 
+## Dev tools for verifying chess positions/tactics
+
+When hand-constructing FENs or tactics for tests (mate-in-N, hanging pieces,
+move ordering), verify with these rather than eyeballing the board -- board
+geometry mistakes are easy to make by hand and easy to catch with these:
+- `python3 tools/chess_check.py "<fen>" [uci_move...]` -- python-chess position
+  oracle: validity, check/checkmate/stalemate, full legal move list. Rejects
+  illegal moves outright. (`pip install -r tools/requirements.txt`)
+- `python3 tools/stockfish_eval.py "<fen>" [depth]` -- queries the system
+  Stockfish install (must be on `PATH`) for bestmove/score, as an independent
+  oracle when sanity-checking a Silverfish move/eval you suspect is wrong.
+
 ## Conventions
 - Commit style: short imperative prefix sometimes used (`fix:`, `feat:`, `style:`, `test:`, `chore:`), but not strictly enforced — many commits are plain descriptions
 - Work happens on feature branches (e.g. `zobrist-threefold`, `king-safety`, `nnue`, `mvv-lva`, `tt`) merged into `master` via PRs
