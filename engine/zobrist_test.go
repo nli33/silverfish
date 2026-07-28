@@ -79,3 +79,76 @@ func TestZobristIncrementalMatchesFromScratch(t *testing.T) {
 		})
 	}
 }
+
+func TestIsRepetition(t *testing.T) {
+	pos := engine.FromFEN("4k3/8/8/8/8/8/8/4K3 w - - 0 1")
+
+	play := func(uci string) engine.Move {
+		m := engine.NewMoveFromStr(uci)
+		var legal engine.Move
+		for _, lm := range pos.LegalMoves() {
+			if lm.From() == m.From() && lm.To() == m.To() {
+				legal = lm
+				break
+			}
+		}
+		if legal == engine.Move(0) {
+			t.Fatalf("%s not legal in %s", uci, pos.ToFEN())
+		}
+		pos.DoMove(legal)
+		return legal
+	}
+
+	if pos.IsRepetition() {
+		t.Fatalf("starting position flagged as a repetition")
+	}
+
+	play("e1d1") // Kd1
+	if pos.IsRepetition() {
+		t.Errorf("no repetition yet after one king move")
+	}
+	play("e8d8") // Kd8
+	if pos.IsRepetition() {
+		t.Errorf("no repetition yet")
+	}
+	play("d1e1") // Ke1 -- back to a position with the same side to move as start, but not equal (black king moved)
+	if pos.IsRepetition() {
+		t.Errorf("position is not actually equal to any prior position yet")
+	}
+	play("d8e8") // Ke8 -- now identical to the starting position, with white to move again
+	if !pos.IsRepetition() {
+		t.Errorf("expected a repetition of the starting position")
+	}
+}
+
+// A capture or pawn move is irreversible, so no repetition can span across
+// one -- IsRepetition must not report a false positive by scanning past it.
+func TestIsRepetitionBoundedByIrreversibleMove(t *testing.T) {
+	pos := engine.FromFEN("4k3/8/8/8/8/8/4P3/4K3 w - - 0 1")
+
+	play := func(uci string) {
+		m := engine.NewMoveFromStr(uci)
+		var legal engine.Move
+		for _, lm := range pos.LegalMoves() {
+			if lm.From() == m.From() && lm.To() == m.To() {
+				legal = lm
+				break
+			}
+		}
+		if legal == engine.Move(0) {
+			t.Fatalf("%s not legal in %s", uci, pos.ToFEN())
+		}
+		pos.DoMove(legal)
+	}
+
+	play("e1d1") // Kd1
+	play("e8d8") // Kd8
+	play("e2e4") // pawn push -- irreversible, resets Rule50
+	play("d8e8") // Ke8
+	play("d1e1") // Ke1 -- side to move matches the position right after the pawn push, but that's the
+	// only candidate and it's on the far side of the irreversible move, so this must not be flagged.
+
+	if pos.IsRepetition() {
+		t.Errorf("false-positive repetition across an irreversible (pawn) move")
+	}
+}

@@ -670,3 +670,30 @@ func (pos *Position) Checkers(color uint8) Bitboard {
 	kingSq := Lsb(kingBB)
 	return pos.AttackersFrom(kingSq, color^1)
 }
+
+// IsRepetition reports whether the current position has occurred before,
+// earlier in this same game (History covers the whole game, not just the
+// current search: main.go replays every move from the UCI "position"
+// command before searching). Treats the first repetition as a draw rather
+// than waiting for a literal threefold -- standard practice, since if a
+// position can be repeated once under continued play, it can be forced
+// again, and there's no benefit to spending nodes proving that a second
+// time.
+//
+// Only positions with the same side to move can repeat, so this steps back
+// two plies at a time. The scan is bounded by Rule50: a capture or pawn
+// move is irreversible, so nothing before the most recent one can be equal
+// to the current position.
+func (pos *Position) IsRepetition() bool {
+	n := len(pos.History)
+	limit := int(pos.Rule50)
+	if limit > n {
+		limit = n
+	}
+	for i := 2; i <= limit; i += 2 {
+		if pos.History[n-i].Hash == pos.Hash {
+			return true
+		}
+	}
+	return false
+}
