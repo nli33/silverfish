@@ -49,6 +49,11 @@ type Position struct {
 	// position's mutable per-perspective evaluation state.
 	Net *Network
 	Acc Accumulator
+
+	// Hash is this position's Zobrist key, maintained incrementally by
+	// PutPiece/RemovePiece and DoMove/UndoMove. Used for repetition
+	// detection (IsRepetition).
+	Hash uint64
 }
 
 type State struct {
@@ -57,6 +62,7 @@ type State struct {
 	Rule50          uint8
 	CapturedPiece   uint8
 	MovedPiece      uint8
+	Hash            uint64
 }
 
 const (
@@ -97,6 +103,8 @@ func (pos *Position) PutPiece(sq Square, piece uint8, color uint8) {
 	pos.Board[sq] = piece
 	pos.Blockers |= sqBB
 	pos.Sides[color] |= sqBB
+
+	pos.Hash ^= pieceSqKey(sq, piece)
 }
 
 func (pos *Position) PutPiecesBB(pieces [2][6]Bitboard) {
@@ -125,7 +133,8 @@ func (pos *Position) PutPiecesBB(pieces [2][6]Bitboard) {
 }
 
 func (pos *Position) RemovePiece(sq Square) {
-	piece := pos.Board[sq]
+	boardPiece := pos.Board[sq] // pre-adjustment (0-5 white, 10-15 black), for the hash key
+	piece := boardPiece
 	color := ColorOf(piece)
 	if color == Black {
 		piece -= 10
@@ -137,6 +146,8 @@ func (pos *Position) RemovePiece(sq Square) {
 	if color != NoColor {
 		pos.Pieces[color][piece] &^= sqBB
 	}
+
+	pos.Hash ^= pieceSqKey(sq, boardPiece)
 
 	// nnue operations come after this adjustment by 10 (0-5 expected; FeatureIndex performs adjustment by 6)
 	fWhite := FeatureIndex(White, color, piece, sq)
@@ -348,6 +359,7 @@ func FromFEN(fen string) Position {
 		panic("invalid fullmove field")
 	}
 	pos.Ply = uint16((fullmove-1)*2 + int(pos.Turn))
+	pos.Hash = Hash(&pos)
 
 	return pos
 }
@@ -371,11 +383,13 @@ func (pos *Position) DoMove(move Move) {
 		CastlingRights:  pos.CastlingRights,
 		Rule50:          pos.Rule50,
 		EnPassantSquare: pos.EnPassantSquare,
+		Hash:            pos.Hash,
 	}
 
 	pos.Rule50++
 
 	// update en passant square
+	pos.Hash ^= enPassantKey(pos.EnPassantSquare)
 	if movingPiece == Pawn {
 		dist := int(to) - int(from)
 		pawnDisplacement := PawnDisplacement(ourColor)
@@ -388,8 +402,10 @@ func (pos *Position) DoMove(move Move) {
 	} else {
 		pos.EnPassantSquare = NoSquare
 	}
+	pos.Hash ^= enPassantKey(pos.EnPassantSquare)
 
 	// update castling rights
+	pos.Hash ^= CastleKeys[pos.CastlingRights]
 	switch movingPiece {
 	case King:
 		if ourColor == White && from == SquareE1 {
@@ -409,6 +425,7 @@ func (pos *Position) DoMove(move Move) {
 			pos.CastlingRights &^= BlackKingside
 		}
 	}
+	pos.Hash ^= CastleKeys[pos.CastlingRights]
 
 	pos.RemovePiece(from)
 
@@ -437,6 +454,7 @@ func (pos *Position) DoMove(move Move) {
 
 	pos.Ply++
 	pos.Turn ^= 1
+	pos.Hash ^= TurnKey
 	pos.History = append(pos.History, state)
 }
 
@@ -481,6 +499,13 @@ func (pos *Position) UndoMove(move Move) {
 	if lastState.CapturedPiece != NoPiece { // capture
 		pos.PutPiece(to, lastState.CapturedPiece, pos.Turn^1) // put piece back
 	}
+
+	// Overwrite rather than incrementally undo: the PutPiece/RemovePiece
+	// calls above already toggled the piece-square hash components, but
+	// turn/castling/en-passant were restored directly (not incrementally)
+	// above, so their hash contributions were never toggled back. Simplest
+	// correct fix is to just restore the exact pre-move hash wholesale.
+	pos.Hash = lastState.Hash
 }
 
 // Note: As long as castling rights are updated properly we don't need to check for
@@ -644,4 +669,31 @@ func (pos *Position) Checkers(color uint8) Bitboard {
 	kingBB := pos.Pieces[color][King]
 	kingSq := Lsb(kingBB)
 	return pos.AttackersFrom(kingSq, color^1)
+}
+
+// IsRepetition reports whether the current position has occurred before,
+// earlier in this same game (History covers the whole game, not just the
+// current search: main.go replays every move from the UCI "position"
+// command before searching). Treats the first repetition as a draw rather
+// than waiting for a literal threefold -- standard practice, since if a
+// position can be repeated once under continued play, it can be forced
+// again, and there's no benefit to spending nodes proving that a second
+// time.
+//
+// Only positions with the same side to move can repeat, so this steps back
+// two plies at a time. The scan is bounded by Rule50: a capture or pawn
+// move is irreversible, so nothing before the most recent one can be equal
+// to the current position.
+func (pos *Position) IsRepetition() bool {
+	n := len(pos.History)
+	limit := int(pos.Rule50)
+	if limit > n {
+		limit = n
+	}
+	for i := 2; i <= limit; i += 2 {
+		if pos.History[n-i].Hash == pos.Hash {
+			return true
+		}
+	}
+	return false
 }

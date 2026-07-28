@@ -426,3 +426,58 @@ func TestUciInfoReportsMateFormat(t *testing.T) {
 		t.Errorf("score mate %d, want score mate 1", lastMateValue)
 	}
 }
+
+// Search must recognize that a candidate move recreating a position already
+// reached earlier in the game is a draw, and prefer a genuinely winning
+// continuation over it -- not just find *a* legal move that happens to
+// avoid the repeat by luck. Primes real game history (via DoMove, exactly
+// like main.go replays a UCI "position ... moves ..." command) with a
+// K+R vs K waiting-move sequence that returns to the exact starting
+// position, then re-offers the same waiting move (h1h2) as a candidate.
+func TestSearchAvoidsKnownRepetition(t *testing.T) {
+	findMove := func(pos *engine.Position, uci string) engine.Move {
+		want := engine.NewMoveFromStr(uci)
+		for _, lm := range pos.LegalMoves() {
+			if lm.From() == want.From() && lm.To() == want.To() {
+				return lm
+			}
+		}
+		return engine.Move(0)
+	}
+
+	pos := engine.FromFEN("4k3/8/8/8/2K5/8/8/7R w - - 0 1")
+	for _, uci := range []string{"h1h2", "e8e7", "h2h1", "e7e8"} {
+		m := findMove(&pos, uci)
+		if m == engine.Move(0) {
+			t.Fatalf("priming move %s not legal in %s", uci, pos.ToFEN())
+		}
+		pos.DoMove(m)
+	}
+
+	// h1h2 recreates the position from right after the first h1h2 -- same
+	// side to move, same everything. Confirmed at the Position level too
+	// (TestIsRepetition covers the mechanism directly); this checks it
+	// actually changes Search()'s behavior.
+	repeat := findMove(&pos, "h1h2")
+	clone := pos.Clone()
+	clone.DoMove(repeat)
+	if !clone.IsRepetition() {
+		t.Fatalf("test setup bug: h1h2 was expected to recreate a prior position")
+	}
+
+	for _, depth := range []int{1, 2, 3} {
+		p := pos.Clone()
+		search := engine.Search{MaxDepth: depth, TimeLimit: 4 * time.Second}
+		search.Init(&p)
+		score, move := search.Search()
+
+		if move == repeat {
+			t.Errorf("depth %d: chose h1h2, the known repetition, when other winning moves are available", depth)
+		}
+		// A rook-up win should score decisively positive, not be dragged
+		// toward 0 just because one of the candidate moves is a draw.
+		if score < 200 {
+			t.Errorf("depth %d: score = %d, want a decisively positive (rook-up) score", depth, score)
+		}
+	}
+}

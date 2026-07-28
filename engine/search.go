@@ -274,6 +274,13 @@ func (search *Search) Quiescence(alpha, beta int32, qdepth int, ply int) int32 {
 func (search *Search) alphaBetaInner(alpha, beta int32, depth int, ply int) int32 {
 	search.Nodes++
 
+	// Treat the first repetition as a draw rather than waiting for a literal
+	// threefold (standard practice -- see Position.IsRepetition). Checked
+	// before move generation so a repeated node also skips that work.
+	if search.Pos.IsRepetition() {
+		return 0
+	}
+
 	moveList := GenMoves(&search.Pos, BB_Full)
 
 	ScoreMoves(&search.Pos, &moveList)
