@@ -60,6 +60,31 @@ func TestSearchReproducible(t *testing.T) {
 	}
 }
 
+// Quiescence must recognize checkmate reached via a capture, not silently
+// fall back to a stand-pat-derived evaluation. MaxDepth=1 means the position
+// right after White's move is evaluated by Quiescence itself (depth 0), so
+// this specifically exercises Quiescence's own mate detection, not
+// alphaBetaInner's. g1g7 (Qxg7#) is a real forced mate: the queen captures
+// the only black pawn with check, defended by the bishop on h6, and the
+// black king has no flight square or recapture -- verified with
+// tools/chess_check.py rather than by hand.
+func TestQuiescenceDetectsCheckmate(t *testing.T) {
+	pos := engine.FromFEN("7k/6p1/7B/8/8/8/8/4K1Q1 w - - 0 1")
+	search := engine.Search{
+		MaxDepth:  1,
+		TimeLimit: 4 * time.Second,
+	}
+	search.Init(&pos)
+
+	score, bestMove := search.Search()
+	if score < engine.Infinity-10 {
+		t.Errorf("score = %d, want a mate score near +Infinity", score)
+	}
+	if bestMove.ToString() != "g1g7" {
+		t.Errorf("bestMove = %s, want g1g7 (Qxg7#)", bestMove.ToString())
+	}
+}
+
 // Forced mates: any correct search must find them, independent of eval tuning.
 func TestSearchFindsMateInOne(t *testing.T) {
 	cases := []struct {

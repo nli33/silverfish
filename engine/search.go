@@ -150,21 +150,32 @@ func (search *Search) Search() (int32, Move) {
 	return bestScore, bestMove
 }
 
-func (search *Search) Quiescence(alpha, beta int32, qdepth int) int32 {
+// ply mirrors alphaBetaInner's ply: the number of plies from the search
+// root, needed so a checkmate found here scores consistently with one found
+// in alphaBetaInner (see the mate-distance comment there).
+func (search *Search) Quiescence(alpha, beta int32, qdepth int, ply int) int32 {
 	if qdepth > MaxQuiescenceDepth {
 		return Evaluate(&search.Pos)
 	}
 
-	standPat := Evaluate(&search.Pos)
-	if standPat >= beta {
-		return beta
-	}
-	if standPat > alpha {
-		alpha = standPat
+	inCheck := search.Pos.Checkers(search.Pos.Turn) != 0
+
+	// Unlike a capture, check can't be declined -- taking a stand-pat floor
+	// while in check can hide that the position is actually lost (or won)
+	// tactically, so it's skipped entirely here; every evasion must be
+	// searched instead.
+	if !inCheck {
+		standPat := Evaluate(&search.Pos)
+		if standPat >= beta {
+			return beta
+		}
+		if standPat > alpha {
+			alpha = standPat
+		}
 	}
 
 	var moveList MoveList
-	if search.Pos.Checkers(search.Pos.Turn) != 0 {
+	if inCheck {
 		moveList = GenMoves(&search.Pos, BB_Full)
 	} else {
 		moveList = GenMoves(&search.Pos, search.Pos.Sides[search.Pos.Turn^1]) // only captures
@@ -173,16 +184,18 @@ func (search *Search) Quiescence(alpha, beta int32, qdepth int) int32 {
 	ScoreMoves(&search.Pos, &moveList)
 	OrderMoves(&search.Pos, &moveList)
 
+	hasLegal := false
 	for i := uint8(0); i < moveList.Count; i++ {
 		move := moveList.Moves[i]
 		if !search.Pos.MoveIsLegal(move) {
 			continue
 		}
+		hasLegal = true
 
 		search.Nodes++
 
 		search.Pos.DoMove(move)
-		score := -search.Quiescence(-beta, -alpha, qdepth+1)
+		score := -search.Quiescence(-beta, -alpha, qdepth+1, ply+1)
 		search.Pos.UndoMove(move)
 
 		if score >= beta {
@@ -191,6 +204,12 @@ func (search *Search) Quiescence(alpha, beta int32, qdepth int) int32 {
 		if score > alpha {
 			alpha = score
 		}
+	}
+
+	// Running out of captures just means "stand pat" (handled above), but
+	// running out of legal evasions while in check is checkmate.
+	if inCheck && !hasLegal {
+		return -(Infinity - int32(ply))
 	}
 
 	return alpha
@@ -222,7 +241,7 @@ func (search *Search) alphaBetaInner(alpha, beta int32, depth int, ply int) int3
 
 	if depth == 0 {
 		// return Evaluate(pos)
-		return search.Quiescence(alpha, beta, 0)
+		return search.Quiescence(alpha, beta, 0, ply)
 	}
 
 	bestScore := -Infinity
