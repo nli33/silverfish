@@ -115,6 +115,14 @@ func uciProcessGoMessage(message string) UciGoMessage {
 			result.Infinite = true
 		case "perft":
 			result.Perft = true
+			// Accept "go perft N" as shorthand for "go perft depth N":
+			// if the next token is a bare integer (not a recognized
+			// keyword), treat it as the depth.
+			if i+1 < len(tokens) {
+				if depth, err := strconv.Atoi(tokens[i+1]); err == nil {
+					result.Depth = int16(depth)
+				}
+			}
 		case "depth":
 			if depth, ok := intArg(i); ok {
 				result.Depth = int16(depth)
@@ -150,7 +158,10 @@ func UciProcessClientMessage(stdin *bufio.Scanner) UciClientMessage {
 
 	result := stdin.Scan()
 	if !result {
-		UciError("I/O error or something.")
+		// EOF (or a real read error) means there is no more input to read.
+		// Treat it as a quit so callers stop looping instead of spinning on
+		// a Scan() that will keep returning false forever.
+		message.MessageType = UciQuitClientMessage
 		return message
 	}
 

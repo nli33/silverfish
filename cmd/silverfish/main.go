@@ -108,8 +108,11 @@ mainloop:
 			if active {
 				// A search goroutine is running. Only quit is handled here;
 				// everything else (including stop) is dropped, since Search
-				// has no cancellation mechanism yet.
+				// has no cancellation mechanism yet. Wait for the goroutine
+				// to actually finish (and print its result) before exiting,
+				// rather than tearing down the process out from under it.
 				if message.MessageType == engine.UciQuitClientMessage {
+					<-actionAlertChannel
 					break mainloop
 				}
 				continue
