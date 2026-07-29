@@ -11,6 +11,7 @@ var defaultNet *Network
 func Init() {
 	InitBitboard()
 	InitZobrist()
+	allocTT(TTSizeMB)
 	if err := LoadDefaultNetwork(""); err != nil {
 		panic("engine: failed to load default NNUE network: " + err.Error())
 	}

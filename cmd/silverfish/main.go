@@ -125,6 +125,8 @@ mainloop:
 				engine.UciReadyOk()
 			case engine.UciPositionClientMessage:
 				position = message.Position.Clone()
+			case engine.UciNewGameClientMessage:
+				engine.ClearTT()
 			case engine.UciQuitClientMessage:
 				break mainloop
 			case engine.UciGoClientMessage:
