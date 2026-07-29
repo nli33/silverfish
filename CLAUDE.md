@@ -12,7 +12,7 @@
 ## Testing
 - Run tests: `make test` (equivalent to `go test ./engine`)
 - Test files: `*_test.go` colocated with source in `engine/`
-- `perft` is used as the correctness check for move generation (`engine/perft.go`, compared against `perft1`/`perft2` reference files and `tools/cmp_perfts.py`)
+- `perft` is used as the correctness check for move generation (`engine/perft.go`): run `make perft` (or `go run tools/perft_bench.go`), which checks startpos plus several hand-picked positions (castling rights, en passant/promotion-heavy, pinned pieces, etc.) against known-correct node counts, no UCI/subprocess involved
 
 ## Build & Run
 - Dev/run UCI loop: `make run` (or `go run ./cmd/silverfish`)
