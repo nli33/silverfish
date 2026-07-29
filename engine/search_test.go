@@ -414,7 +414,7 @@ func TestUciInfoReportsScoreOncePerDepth(t *testing.T) {
 		t.Errorf("last scored info line score = %d, want %d (Search()'s returned score)", lastScore, finalScore)
 	}
 	if !sawUnscoredPing {
-		t.Errorf("expected at least one unscored internal-node progress ping (search.Nodes should exceed 32767 at this depth)")
+		t.Errorf("expected at least one unscored internal-node progress ping (search.Nodes should exceed engine.NodeReportInterval at this depth)")
 	}
 }
 

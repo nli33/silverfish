@@ -34,9 +34,18 @@ func mateInfo(score int32) (movesToMate int32, isMate bool) {
 	return movesToMate, true
 }
 
+const NodeReportInterval = 32768
+
 type Search struct {
 	Pos   Position
 	Nodes int
+
+	// lastReportedNodes is the Nodes value as of the last periodic
+	// unscored progress ping (see alphaBetaInner) -- a threshold-crossing
+	// check against this, rather than a Nodes%NodeReportInterval==0 check,
+	// so a ping is guaranteed at least every NodeReportInterval nodes
+	// regardless of exactly which node count a check happens to land on.
+	lastReportedNodes int
 
 	// limits
 	StartTime time.Time
@@ -384,7 +393,8 @@ func (search *Search) alphaBetaInner(alpha, beta int32, depth int, ply int) int3
 			alpha = score
 		}
 
-		if search.Nodes&32767 == 0 {
+		if search.Nodes-search.lastReportedNodes >= NodeReportInterval {
+			search.lastReportedNodes = search.Nodes
 			// No score here: bestScore is this internal node's own
 			// negamax-local value, not the root-relative evaluation UCI's
 			// `score` field is supposed to report -- nodes/depth are the
