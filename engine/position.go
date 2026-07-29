@@ -132,6 +132,119 @@ func (pos *Position) PutPiecesBB(pieces [2][6]Bitboard) {
 	}
 }
 
+// MovePiece relocates a piece from one square to another (no capture, no
+// promotion), equivalent to RemovePiece(from) followed by PutPiece(to, piece,
+// color) but doing the NNUE accumulator update as a single fused AddSub pass
+// per perspective instead of two separate passes.
+func (pos *Position) MovePiece(from, to Square, piece, color uint8) {
+	fromBB := Bitboard(1 << from)
+	toBB := Bitboard(1 << to)
+
+	boardPieceFrom := pos.Board[from] // pre-adjustment, for the hash key
+	pos.Pieces[color][piece] = pos.Pieces[color][piece]&^fromBB | toBB
+	pos.Blockers = pos.Blockers&^fromBB | toBB
+	pos.Sides[color] = pos.Sides[color]&^fromBB | toBB
+
+	boardPieceTo := piece
+	if color == Black {
+		boardPieceTo += 10
+	}
+	pos.Board[from] = NoPiece
+	pos.Board[to] = boardPieceTo
+
+	pos.Hash ^= pieceSqKey(from, boardPieceFrom)
+	pos.Hash ^= pieceSqKey(to, boardPieceTo)
+
+	fWhiteFrom := FeatureIndex(White, color, piece, from)
+	fBlackFrom := FeatureIndex(Black, color, piece, from)
+	fWhiteTo := FeatureIndex(White, color, piece, to)
+	fBlackTo := FeatureIndex(Black, color, piece, to)
+	pos.Acc.AddSub(pos.Net, fWhiteTo, fWhiteFrom, White)
+	pos.Acc.AddSub(pos.Net, fBlackTo, fBlackFrom, Black)
+}
+
+// CapturePiece relocates a piece from one square to another while capturing
+// an enemy piece on the destination square -- equivalent to RemovePiece(from)
+// + RemovePiece(to) + PutPiece(to, piece, color) but doing the NNUE
+// accumulator update as a single fused AddSubSub pass per perspective.
+func (pos *Position) CapturePiece(from, to Square, piece, color, capturedPiece uint8) {
+	theirColor := color ^ 1
+	fromBB := Bitboard(1 << from)
+	toBB := Bitboard(1 << to)
+
+	boardPieceFrom := pos.Board[from] // pre-adjustment, for the hash key
+	boardPieceTo := pos.Board[to]     // captured piece, pre-adjustment
+
+	pos.Pieces[color][piece] = pos.Pieces[color][piece]&^fromBB | toBB
+	pos.Pieces[theirColor][capturedPiece] &^= toBB
+	pos.Sides[color] = pos.Sides[color]&^fromBB | toBB
+	pos.Sides[theirColor] &^= toBB
+	pos.Blockers &^= fromBB // `to` stays occupied throughout
+
+	newBoardPieceTo := piece
+	if color == Black {
+		newBoardPieceTo += 10
+	}
+	pos.Board[from] = NoPiece
+	pos.Board[to] = newBoardPieceTo
+
+	pos.Hash ^= pieceSqKey(from, boardPieceFrom)
+	pos.Hash ^= pieceSqKey(to, boardPieceTo)
+	pos.Hash ^= pieceSqKey(to, newBoardPieceTo)
+
+	fWhiteFrom := FeatureIndex(White, color, piece, from)
+	fBlackFrom := FeatureIndex(Black, color, piece, from)
+	fWhiteTo := FeatureIndex(White, color, piece, to)
+	fBlackTo := FeatureIndex(Black, color, piece, to)
+	fWhiteCaptured := FeatureIndex(White, theirColor, capturedPiece, to)
+	fBlackCaptured := FeatureIndex(Black, theirColor, capturedPiece, to)
+
+	pos.Acc.AddSubSub(pos.Net, fWhiteTo, fWhiteFrom, fWhiteCaptured, White)
+	pos.Acc.AddSubSub(pos.Net, fBlackTo, fBlackFrom, fBlackCaptured, Black)
+}
+
+// UncapturePiece is the inverse of CapturePiece: it moves a piece from `to`
+// back to `from` and restores a previously-captured enemy piece on `to`,
+// fusing the accumulator update (AddAddSub) into one pass per perspective.
+func (pos *Position) UncapturePiece(from, to Square, piece, color, capturedPiece uint8) {
+	theirColor := color ^ 1
+	fromBB := Bitboard(1 << from)
+	toBB := Bitboard(1 << to)
+
+	boardPieceTo := pos.Board[to] // mover currently on `to`, pre-adjustment
+
+	pos.Pieces[color][piece] = pos.Pieces[color][piece]&^toBB | fromBB
+	pos.Pieces[theirColor][capturedPiece] |= toBB
+	pos.Sides[color] = pos.Sides[color]&^toBB | fromBB
+	pos.Sides[theirColor] |= toBB
+	pos.Blockers |= fromBB // `to` stays occupied throughout
+
+	newBoardPieceFrom := piece
+	if color == Black {
+		newBoardPieceFrom += 10
+	}
+	newBoardPieceTo := capturedPiece
+	if theirColor == Black {
+		newBoardPieceTo += 10
+	}
+	pos.Board[from] = newBoardPieceFrom
+	pos.Board[to] = newBoardPieceTo
+
+	pos.Hash ^= pieceSqKey(to, boardPieceTo)
+	pos.Hash ^= pieceSqKey(from, newBoardPieceFrom)
+	pos.Hash ^= pieceSqKey(to, newBoardPieceTo)
+
+	fWhiteFrom := FeatureIndex(White, color, piece, from)
+	fBlackFrom := FeatureIndex(Black, color, piece, from)
+	fWhiteTo := FeatureIndex(White, color, piece, to)
+	fBlackTo := FeatureIndex(Black, color, piece, to)
+	fWhiteCaptured := FeatureIndex(White, theirColor, capturedPiece, to)
+	fBlackCaptured := FeatureIndex(Black, theirColor, capturedPiece, to)
+
+	pos.Acc.AddAddSub(pos.Net, fWhiteFrom, fWhiteCaptured, fWhiteTo, White)
+	pos.Acc.AddAddSub(pos.Net, fBlackFrom, fBlackCaptured, fBlackTo, Black)
+}
+
 func (pos *Position) RemovePiece(sq Square) {
 	boardPiece := pos.Board[sq] // pre-adjustment (0-5 white, 10-15 black), for the hash key
 	piece := boardPiece
@@ -427,29 +540,29 @@ func (pos *Position) DoMove(move Move) {
 	}
 	pos.Hash ^= CastleKeys[pos.CastlingRights]
 
-	pos.RemovePiece(from)
-
 	if move.IsCastling() {
+		pos.RemovePiece(from)
 		rookFromSquare := RookSquares[move]
 		pos.RemovePiece(rookFromSquare)
 		rookToSquare := Square(int(to) - KingCastlingDirection(move))
 		pos.PutPiece(rookToSquare, Rook, ourColor)
 		pos.PutPiece(to, King, ourColor)
 	} else if move.IsEnPassant() {
+		pos.RemovePiece(from)
 		capturedPawnSq := Square(int(to) - PawnDisplacement(ourColor))
 		pos.RemovePiece(capturedPawnSq)
 		pos.PutPiece(to, movingPiece, ourColor)
 	} else if move.IsPromotion() {
+		pos.RemovePiece(from)
 		if capturedPiece != NoPiece { // is a capture
 			pos.RemovePiece(to)
 		}
 		pos.PutPiece(to, move.Promotion(), ourColor)
-	} else {
-		if capturedPiece != NoPiece { // is a capture
-			pos.RemovePiece(to)
-			pos.Rule50 = 0
-		}
-		pos.PutPiece(to, movingPiece, ourColor)
+	} else if capturedPiece != NoPiece { // is a capture: fuse remove(from)+remove(to)+put(to) into one accumulator pass
+		pos.Rule50 = 0
+		pos.CapturePiece(from, to, movingPiece, ourColor, capturedPiece)
+	} else { // plain quiet move: fuse remove(from)+put(to) into one accumulator pass
+		pos.MovePiece(from, to, movingPiece, ourColor)
 	}
 
 	pos.Ply++
@@ -477,27 +590,28 @@ func (pos *Position) UndoMove(move Move) {
 	pos.EnPassantSquare = lastState.EnPassantSquare
 	pos.Rule50 = lastState.Rule50
 
-	// put moved piece back to origin square
-	pos.PutPiece(from, lastState.MovedPiece, pos.Turn)
-
 	if move.IsEnPassant() {
+		pos.PutPiece(from, lastState.MovedPiece, pos.Turn) // put moved piece back to origin square
 		capturedPawnSq := Square(int(to) - PawnDisplacement(pos.Turn))
 		pos.RemovePiece(to)                            // remove capturer
 		pos.PutPiece(capturedPawnSq, Pawn, pos.Turn^1) // put captured pawn back
 	} else if move.IsCastling() {
+		pos.PutPiece(from, lastState.MovedPiece, pos.Turn) // put moved piece back to origin square
 		rookFromSquare := RookSquares[move]
 		rookToSquare := Square(int(to) - KingCastlingDirection(move))
 		pos.RemovePiece(rookToSquare)                // remove rook
 		pos.PutPiece(rookFromSquare, Rook, pos.Turn) // place rook
 		pos.RemovePiece(to)                          // remove king
 	} else if move.IsPromotion() {
-		pos.RemovePiece(to) // remove promoted piece
-	} else { // quiet move
-		pos.RemovePiece(to) // remove piece
-	}
-
-	if lastState.CapturedPiece != NoPiece { // capture
-		pos.PutPiece(to, lastState.CapturedPiece, pos.Turn^1) // put piece back
+		pos.PutPiece(from, lastState.MovedPiece, pos.Turn) // put moved piece back to origin square
+		pos.RemovePiece(to)                                // remove promoted piece
+		if lastState.CapturedPiece != NoPiece {            // capture
+			pos.PutPiece(to, lastState.CapturedPiece, pos.Turn^1) // put piece back
+		}
+	} else if lastState.CapturedPiece != NoPiece { // capture: fuse put(from)+remove(to)+put(to) into one accumulator pass
+		pos.UncapturePiece(from, to, lastState.MovedPiece, pos.Turn, lastState.CapturedPiece)
+	} else { // quiet move: fuse put(from)+remove(to) into one accumulator pass
+		pos.MovePiece(to, from, lastState.MovedPiece, pos.Turn)
 	}
 
 	// Overwrite rather than incrementally undo: the PutPiece/RemovePiece

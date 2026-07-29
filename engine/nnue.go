@@ -27,7 +27,17 @@ type Network struct {
 	WOutput []float32 // [2 * L1]
 	BOutput float32
 
-	FeatureCols [][]float32
+	// FeatureCols is WInput transposed into per-feature columns, laid out
+	// as one flat contiguous slice ([NumInputs * L1]) rather than a slice
+	// of slices, so column access avoids an extra pointer indirection and
+	// keeps neighboring columns cache-adjacent.
+	FeatureCols []float32
+}
+
+// featureCol returns the L1-length column of weights for feature f.
+func (net *Network) featureCol(f uint16) []float32 {
+	start := int(f) * net.L1
+	return net.FeatureCols[start : start+net.L1]
 }
 
 // Accumulator is the mutable per-position NNUE evaluation state: one
@@ -149,15 +159,13 @@ func loadNNUEFromReader(f io.Reader) (*Network, error) {
 func (net *Network) buildFeatureCols() {
 	numInputs := net.NumInputs
 	l1 := net.L1
-	cols := make([][]float32, numInputs)
+	flat := make([]float32, numInputs*l1)
 	for f := 0; f < numInputs; f++ {
-		col := make([]float32, l1)
 		for o := 0; o < l1; o++ {
-			col[o] = net.WInput[o*numInputs+f]
+			flat[f*l1+o] = net.WInput[o*numInputs+f]
 		}
-		cols[f] = col
 	}
-	net.FeatureCols = cols
+	net.FeatureCols = flat
 }
 
 // NewAccumulator allocates a zeroed accumulator sized for net.
@@ -199,7 +207,7 @@ func (acc *Accumulator) Refresh(net *Network, features []uint16, perspective uin
 	a := acc.Values[perspective]
 	copy(a, net.BInput)
 	for _, f := range features {
-		col := net.FeatureCols[f]
+		col := net.featureCol(f)
 		for o := 0; o < len(a); o += 16 {
 			a[o] += col[o]
 			a[o+1] += col[o+1]
@@ -230,7 +238,7 @@ func (acc *Accumulator) RefreshAll(net *Network, featuresW, featuresB []uint16) 
 // Add incrementally adds a feature. NOTE: only using Add() is incorrect
 // since no bias is added -- Reset() (or RefreshAll) must run first.
 func (acc *Accumulator) Add(net *Network, feature uint16, perspective uint8) {
-	col := net.FeatureCols[feature]
+	col := net.featureCol(feature)
 	a := acc.Values[perspective]
 	for o := 0; o < len(a); o += 16 {
 		a[o] += col[o]
@@ -254,7 +262,7 @@ func (acc *Accumulator) Add(net *Network, feature uint16, perspective uint8) {
 
 // Remove incrementally removes a feature.
 func (acc *Accumulator) Remove(net *Network, feature uint16, perspective uint8) {
-	col := net.FeatureCols[feature]
+	col := net.featureCol(feature)
 	a := acc.Values[perspective]
 	for o := 0; o < len(a); o += 16 {
 		a[o] -= col[o]
@@ -273,6 +281,90 @@ func (acc *Accumulator) Remove(net *Network, feature uint16, perspective uint8) 
 		a[o+13] -= col[o+13]
 		a[o+14] -= col[o+14]
 		a[o+15] -= col[o+15]
+	}
+}
+
+// AddSub applies one added feature and one removed feature in a single pass,
+// halving the memory traffic of a separate Add+Remove for the common case of
+// relocating a piece (quiet move) from one square to another.
+func (acc *Accumulator) AddSub(net *Network, addFeature, subFeature uint16, perspective uint8) {
+	addCol := net.featureCol(addFeature)
+	subCol := net.featureCol(subFeature)
+	a := acc.Values[perspective]
+	for o := 0; o < len(a); o += 16 {
+		a[o] += addCol[o] - subCol[o]
+		a[o+1] += addCol[o+1] - subCol[o+1]
+		a[o+2] += addCol[o+2] - subCol[o+2]
+		a[o+3] += addCol[o+3] - subCol[o+3]
+		a[o+4] += addCol[o+4] - subCol[o+4]
+		a[o+5] += addCol[o+5] - subCol[o+5]
+		a[o+6] += addCol[o+6] - subCol[o+6]
+		a[o+7] += addCol[o+7] - subCol[o+7]
+		a[o+8] += addCol[o+8] - subCol[o+8]
+		a[o+9] += addCol[o+9] - subCol[o+9]
+		a[o+10] += addCol[o+10] - subCol[o+10]
+		a[o+11] += addCol[o+11] - subCol[o+11]
+		a[o+12] += addCol[o+12] - subCol[o+12]
+		a[o+13] += addCol[o+13] - subCol[o+13]
+		a[o+14] += addCol[o+14] - subCol[o+14]
+		a[o+15] += addCol[o+15] - subCol[o+15]
+	}
+}
+
+// AddSubSub applies one added feature and two removed features in a single
+// pass -- used for captures, where the mover relocates (add at `to`, sub at
+// `from`) and the captured piece disappears (sub at `to`).
+func (acc *Accumulator) AddSubSub(net *Network, addFeature, subFeature1, subFeature2 uint16, perspective uint8) {
+	addCol := net.featureCol(addFeature)
+	sub1Col := net.featureCol(subFeature1)
+	sub2Col := net.featureCol(subFeature2)
+	a := acc.Values[perspective]
+	for o := 0; o < len(a); o += 16 {
+		a[o] += addCol[o] - sub1Col[o] - sub2Col[o]
+		a[o+1] += addCol[o+1] - sub1Col[o+1] - sub2Col[o+1]
+		a[o+2] += addCol[o+2] - sub1Col[o+2] - sub2Col[o+2]
+		a[o+3] += addCol[o+3] - sub1Col[o+3] - sub2Col[o+3]
+		a[o+4] += addCol[o+4] - sub1Col[o+4] - sub2Col[o+4]
+		a[o+5] += addCol[o+5] - sub1Col[o+5] - sub2Col[o+5]
+		a[o+6] += addCol[o+6] - sub1Col[o+6] - sub2Col[o+6]
+		a[o+7] += addCol[o+7] - sub1Col[o+7] - sub2Col[o+7]
+		a[o+8] += addCol[o+8] - sub1Col[o+8] - sub2Col[o+8]
+		a[o+9] += addCol[o+9] - sub1Col[o+9] - sub2Col[o+9]
+		a[o+10] += addCol[o+10] - sub1Col[o+10] - sub2Col[o+10]
+		a[o+11] += addCol[o+11] - sub1Col[o+11] - sub2Col[o+11]
+		a[o+12] += addCol[o+12] - sub1Col[o+12] - sub2Col[o+12]
+		a[o+13] += addCol[o+13] - sub1Col[o+13] - sub2Col[o+13]
+		a[o+14] += addCol[o+14] - sub1Col[o+14] - sub2Col[o+14]
+		a[o+15] += addCol[o+15] - sub1Col[o+15] - sub2Col[o+15]
+	}
+}
+
+// AddAddSub applies two added features and one removed feature in a single
+// pass -- the inverse of AddSubSub, used to undo a capture: the mover moves
+// back (add at `from`, sub at `to`) and the captured piece reappears (add at
+// `to`).
+func (acc *Accumulator) AddAddSub(net *Network, addFeature1, addFeature2, subFeature uint16, perspective uint8) {
+	add1Col := net.featureCol(addFeature1)
+	add2Col := net.featureCol(addFeature2)
+	subCol := net.featureCol(subFeature)
+	a := acc.Values[perspective]
+	for o := 0; o < len(a); o += 16 {
+		a[o] += add1Col[o] + add2Col[o] - subCol[o]
+		a[o+1] += add1Col[o+1] + add2Col[o+1] - subCol[o+1]
+		a[o+2] += add1Col[o+2] + add2Col[o+2] - subCol[o+2]
+		a[o+3] += add1Col[o+3] + add2Col[o+3] - subCol[o+3]
+		a[o+4] += add1Col[o+4] + add2Col[o+4] - subCol[o+4]
+		a[o+5] += add1Col[o+5] + add2Col[o+5] - subCol[o+5]
+		a[o+6] += add1Col[o+6] + add2Col[o+6] - subCol[o+6]
+		a[o+7] += add1Col[o+7] + add2Col[o+7] - subCol[o+7]
+		a[o+8] += add1Col[o+8] + add2Col[o+8] - subCol[o+8]
+		a[o+9] += add1Col[o+9] + add2Col[o+9] - subCol[o+9]
+		a[o+10] += add1Col[o+10] + add2Col[o+10] - subCol[o+10]
+		a[o+11] += add1Col[o+11] + add2Col[o+11] - subCol[o+11]
+		a[o+12] += add1Col[o+12] + add2Col[o+12] - subCol[o+12]
+		a[o+13] += add1Col[o+13] + add2Col[o+13] - subCol[o+13]
+		a[o+14] += add1Col[o+14] + add2Col[o+14] - subCol[o+14]
+		a[o+15] += add1Col[o+15] + add2Col[o+15] - subCol[o+15]
 	}
 }
 
