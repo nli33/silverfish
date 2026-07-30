@@ -31,6 +31,9 @@ Two distinct workflows, don't conflate them:
 - Prefer these scripts over hand-written `ssh`/`fastchess` invocations — less to get wrong.
 - Stockfish's `UCI_Elo` is CCRL-calibrated, not FIDE — treat resulting Elo estimates as a same-species floor, not a human-equivalent number.
 
+## Process
+- Don't write substantial one-off code and run it ad hoc on the command line (e.g. `python3 -c "..."`) for things like training/benchmarking — not reproducible, not reviewed. Fix or extend the actual pipeline/tool script and run that instead.
+
 ## Conventions
 - Feature branches → PR → merge to `master`. Commit prefixes (`fix:`, `feat:`, etc.) used loosely, not enforced.
 - Any change to move selection/ordering needs an SPRT result before merging, same bar as past search features.
