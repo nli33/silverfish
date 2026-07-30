@@ -36,6 +36,12 @@ func mateInfo(score int32) (movesToMate int32, isMate bool) {
 
 const NodeReportInterval = 32768
 
+// MaxKillerPly bounds the killers/history-indexed ply depth. Search depth is
+// user-controllable (`go depth N`), so this is a defensive cap, not an
+// expected real depth -- ply beyond it just skips killer lookups/stores
+// rather than growing the table unboundedly.
+const MaxKillerPly = 128
+
 type Search struct {
 	Pos   Position
 	Nodes int
@@ -47,10 +53,102 @@ type Search struct {
 	// regardless of exactly which node count a check happens to land on.
 	lastReportedNodes int
 
+	// killers holds up to 2 quiet moves per ply that have caused a beta
+	// cutoff there before, tried before other quiets on the assumption
+	// that a move good enough to cut off once at this ply is often good
+	// again in a sibling node (same ply, different path to it). Stored
+	// masked to their low 16 bits (see orderMoveFirst) since a Move's
+	// score field is mutable and irrelevant for identity comparison.
+	killers [MaxKillerPly][2]Move
+
+	// history accumulates a [side][from][to] weight on every quiet-move
+	// beta cutoff, weighted by depth^2 so cutoffs found deeper (more
+	// searched-out, so more reliable) count for more. Orders quiet moves
+	// that aren't killers at this ply. Unlike killers this isn't
+	// ply-indexed -- it's a search-wide "this from/to square pair tends to
+	// be strong" signal, not a "strong at this specific ply" one.
+	history [2][64][64]int32
+
 	// limits
 	StartTime time.Time
 	TimeLimit time.Duration
 	MaxDepth  int
+}
+
+// isQuietMove reports whether move is neither a capture nor a promotion.
+// Must be called with pos in the state move would be played from (i.e.
+// before DoMove, or after the matching UndoMove) -- it inspects the
+// pre-move board to find move's victim, if any. En passant's victim isn't
+// on move's own To() square, so it's special-cased directly.
+func isQuietMove(pos *Position, move Move) bool {
+	if move.IsPromotion() || move.IsEnPassant() {
+		return false
+	}
+	_, victim := pos.GetSquare(move.To())
+	return victim == NoPiece
+}
+
+// recordKiller stores move as the newest killer at ply, keeping the
+// previous killers[ply][0] as the second slot (so the two most recent
+// distinct cutoff moves at this ply are remembered). A no-op if move is
+// already the top killer here, to avoid the two slots collapsing to
+// duplicates of the same move.
+func (search *Search) recordKiller(move Move, ply int) {
+	if ply >= MaxKillerPly {
+		return
+	}
+	m := move & 0xffff
+	if search.killers[ply][0]&0xffff == m {
+		return
+	}
+	search.killers[ply][1] = search.killers[ply][0]
+	search.killers[ply][0] = m
+}
+
+// recordHistory increments the history weight for a quiet move that caused
+// a beta cutoff, by depth^2. Deliberately unbounded/unclamped here --
+// scoreQuiets clamps at read time (a move's score field is only 16 bits, so
+// the raw accumulator must never be written into it directly).
+func (search *Search) recordHistory(move Move, depth int) {
+	search.history[search.Pos.Turn][move.From()][move.To()] += int32(depth * depth)
+}
+
+// maxQuietScore is the highest score scoreQuiets ever assigns, kept below
+// MvvLva's lowest nonzero entry (10) so a killer or history-favored quiet
+// can never be ordered ahead of an actual capture.
+const maxQuietScore = 9
+
+// scoreQuiets scores every not-yet-scored (quiet) move in moveList using
+// search's killers and history tables, leaving moves ScoreMoves already
+// scored (captures/promotions, all nonzero) untouched. Killers at this ply
+// take the top two quiet scores; everything else gets a history-derived
+// score clamped to fit below them.
+func (search *Search) scoreQuiets(moveList *MoveList, ply int) {
+	var killer1, killer2 Move
+	if ply < MaxKillerPly {
+		killer1, killer2 = search.killers[ply][0], search.killers[ply][1]
+	}
+
+	for i := 0; i < int(moveList.Count); i++ {
+		move := &moveList.Moves[i]
+		if move.Score() != 0 {
+			continue
+		}
+
+		masked := *move & 0xffff
+		switch {
+		case killer1 != 0 && masked == killer1:
+			move.GiveScore(maxQuietScore)
+		case killer2 != 0 && masked == killer2:
+			move.GiveScore(maxQuietScore - 1)
+		default:
+			h := search.history[search.Pos.Turn][move.From()][move.To()]
+			if h > maxQuietScore-2 {
+				h = maxQuietScore - 2
+			}
+			move.GiveScore(int(h))
+		}
+	}
 }
 
 // return number in milliseconds
@@ -379,6 +477,7 @@ func (search *Search) alphaBetaInner(alpha, beta int32, depth int, ply int) int3
 	moveList := GenMoves(&search.Pos, BB_Full)
 
 	ScoreMoves(&search.Pos, &moveList)
+	search.scoreQuiets(&moveList, ply)
 	OrderMoves(&search.Pos, &moveList)
 	orderMoveFirst(&moveList, ttMove)
 
@@ -413,15 +512,14 @@ func (search *Search) alphaBetaInner(alpha, beta int32, depth int, ply int) int3
 		legalMoveNum++
 
 		// Late Move Reductions: search moves that are unlikely to matter --
-		// late in the (MVV-LVA-then-TT-move) ordering, quiet (score 0: no
-		// killer/history heuristic yet to distinguish quiets further),
-		// not a promotion, and not while in check -- at reduced depth
-		// first. If a reduced search still beats alpha, it wasn't
-		// obviously bad, so re-search it at full depth before trusting the
-		// score. LeafMoveNum/depth thresholds are conservative (no PVS or
-		// killer/history yet to lean on for ordering confidence).
+		// late in the (MVV-LVA/killer/history-then-TT-move) ordering, quiet,
+		// and not while in check -- at reduced depth first. If a reduced
+		// search still beats alpha, it wasn't obviously bad, so re-search it
+		// at full depth before trusting the score. LeafMoveNum/depth
+		// thresholds are conservative (no PVS yet to lean on for ordering
+		// confidence).
 		reduction := 0
-		if depth >= 3 && legalMoveNum > 3 && !inCheck && move.Score() == 0 && !move.IsPromotion() {
+		if depth >= 3 && legalMoveNum > 3 && !inCheck && isQuietMove(&search.Pos, move) {
 			reduction = 1
 			if legalMoveNum > 6 {
 				reduction = 2
@@ -445,6 +543,10 @@ func (search *Search) alphaBetaInner(alpha, beta int32, depth int, ply int) int3
 
 		if score >= beta {
 			TTStore(search.Pos.Hash, move, ScoreToTT(score, ply), depth, BoundLower)
+			if isQuietMove(&search.Pos, move) {
+				search.recordKiller(move, ply)
+				search.recordHistory(move, depth)
+			}
 			return score
 		}
 		if score > bestScore {
