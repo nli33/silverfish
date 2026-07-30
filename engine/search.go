@@ -313,6 +313,15 @@ func (search *Search) Quiescence(alpha, beta int32, qdepth int, ply int) int32 {
 	return alpha
 }
 
+// hasNonPawnMaterial reports whether color has any knight/bishop/rook/queen
+// on the board. Used to guard null-move pruning against zugzwang: in bare
+// king-and-pawn endgames, passing can be strictly better than any legal
+// move, which breaks the "a free move can only help our opponent" assumption
+// null-move pruning relies on.
+func hasNonPawnMaterial(pos *Position, color uint8) bool {
+	return pos.Pieces[color][Knight]|pos.Pieces[color][Bishop]|pos.Pieces[color][Rook]|pos.Pieces[color][Queen] != 0
+}
+
 // ply is the number of plies from the root of this search (the move passed
 // to alphaBetaInner from Search() is ply 1). Used only to prefer faster
 // mates (and defer forced ones): a mate found at a smaller ply scores
@@ -345,6 +354,28 @@ func (search *Search) alphaBetaInner(alpha, beta int32, depth int, ply int) int3
 		}
 	}
 
+	inCheckEarly := search.Pos.Checkers(search.Pos.Turn) != 0
+
+	// Null-move pruning: let the opponent move twice in a row (i.e. we do
+	// nothing) and search at reduced depth. If even a free move for the
+	// opponent can't bring the score down to beta, our actual move surely
+	// won't either, so prune. Guarded against zugzwang (positions where
+	// passing is actually better than any legal move, breaking the "a free
+	// move can only help" assumption -- mainly king-and-pawn endgames) by
+	// requiring the side to move to have some non-pawn material, and
+	// skipped in check (a null move can't escape check, so the reduced
+	// search would be meaningless) and near mate scores (verifying a mate
+	// score off a reduced, unverified search is unreliable).
+	if depth >= 3 && !inCheckEarly && beta < MateScoreThreshold && hasNonPawnMaterial(&search.Pos, search.Pos.Turn) {
+		const nullMoveReduction = 2
+		prevEP := search.Pos.DoNullMove()
+		score := -search.alphaBetaInner(-beta, -beta+1, depth-1-nullMoveReduction, ply+1)
+		search.Pos.UndoNullMove(prevEP)
+		if score >= beta {
+			return score
+		}
+	}
+
 	moveList := GenMoves(&search.Pos, BB_Full)
 
 	ScoreMoves(&search.Pos, &moveList)
@@ -354,7 +385,7 @@ func (search *Search) alphaBetaInner(alpha, beta int32, depth int, ply int) int3
 	hasLegal := false
 
 	if moveList.Count == 0 {
-		if search.Pos.Checkers(search.Pos.Turn) != 0 {
+		if inCheckEarly {
 			// checkmate
 			return -(Infinity - int32(ply))
 		} else {
@@ -368,7 +399,7 @@ func (search *Search) alphaBetaInner(alpha, beta int32, depth int, ply int) int3
 		return search.Quiescence(alpha, beta, 0, ply)
 	}
 
-	inCheck := search.Pos.Checkers(search.Pos.Turn) != 0
+	inCheck := inCheckEarly
 
 	bestScore := -Infinity
 	var bestMove Move

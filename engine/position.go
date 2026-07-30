@@ -571,6 +571,27 @@ func (pos *Position) DoMove(move Move) {
 	pos.History = append(pos.History, state)
 }
 
+// DoNullMove passes the turn without moving a piece (used by null-move
+// pruning). Returns the previous en-passant square, to be passed to
+// UndoNullMove. Unlike DoMove, this doesn't push onto pos.History -- the
+// caller is expected to restore state itself via UndoNullMove rather than
+// via UndoMove/IsRepetition machinery.
+func (pos *Position) DoNullMove() Square {
+	prevEP := pos.EnPassantSquare
+	pos.Hash ^= enPassantKey(pos.EnPassantSquare)
+	pos.EnPassantSquare = NoSquare
+	pos.Turn ^= 1
+	pos.Hash ^= TurnKey
+	return prevEP
+}
+
+func (pos *Position) UndoNullMove(prevEP Square) {
+	pos.Turn ^= 1
+	pos.Hash ^= TurnKey
+	pos.EnPassantSquare = prevEP
+	pos.Hash ^= enPassantKey(pos.EnPassantSquare)
+}
+
 func (pos *Position) UndoMove(move Move) {
 	from := move.From()
 	to := move.To()
