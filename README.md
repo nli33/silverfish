@@ -12,6 +12,10 @@ UCI Chess Engine (work-in-progress)
 - Negamax search with alpha-beta pruning
 - Iterative deepening
 - Quiescence search
+- Transposition table (Zobrist hashing)
+- Late move reductions
+- Null-move pruning
+- Killer moves & history heuristic move ordering
 - NNUE Evaluation, (768->256)x2->1 architecture, vertical mirroring, trained with PyTorch
     - Previously: evaluation using material counting + piece-square tables
 
