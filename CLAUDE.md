@@ -58,7 +58,7 @@ geometry mistakes are easy to make by hand and easy to catch with these:
 - Large `.pgn` files at repo root are SPRT test game logs, not source — ignore unless asked about engine testing history
 
 ## PR Messages
-- Keep concise but readable — this is a small solo/pair project, not a place for boilerplate templates
-- Open with a brief one-or-two-line summary of what changed; skip further detail on parts that are self-explanatory from reading the diff
-- Spend the remaining words on *why*, not *what*: the reasoning behind non-obvious design decisions, tradeoffs considered, and anything a reviewer would otherwise have to ask about
-- For search/eval changes that affect move selection, include the SPRT result (Elo/LLR/games) that justified the change; pure refactors/perf-only changes don't need one
+- Keep concise but readable — avoid boilerplate templates
+- Open with a brief summary of what changed; skip further detail on parts that are self-explanatory from reading the diff
+- Spend remaining words on *why*, not *what*: the reasoning behind non-obvious design decisions, tradeoffs considered, anything a reviewer would otherwise have to ask about
+- For changes that affect engine performance, include the full SPRT summary (Elo/LLR/games etc) that justified the change; pure refactors/perf-only changes don't need one
