@@ -368,17 +368,48 @@ func (search *Search) alphaBetaInner(alpha, beta int32, depth int, ply int) int3
 		return search.Quiescence(alpha, beta, 0, ply)
 	}
 
+	inCheck := search.Pos.Checkers(search.Pos.Turn) != 0
+
 	bestScore := -Infinity
 	var bestMove Move
+	legalMoveNum := 0
 	for i := uint8(0); i < moveList.Count; i++ {
 		move := moveList.Moves[i]
 		if !search.Pos.MoveIsLegal(move) {
 			continue
 		}
 		hasLegal = true
+		legalMoveNum++
+
+		// Late Move Reductions: search moves that are unlikely to matter --
+		// late in the (MVV-LVA-then-TT-move) ordering, quiet (score 0: no
+		// killer/history heuristic yet to distinguish quiets further),
+		// not a promotion, and not while in check -- at reduced depth
+		// first. If a reduced search still beats alpha, it wasn't
+		// obviously bad, so re-search it at full depth before trusting the
+		// score. LeafMoveNum/depth thresholds are conservative (no PVS or
+		// killer/history yet to lean on for ordering confidence).
+		reduction := 0
+		if depth >= 3 && legalMoveNum > 3 && !inCheck && move.Score() == 0 && !move.IsPromotion() {
+			reduction = 1
+			if legalMoveNum > 6 {
+				reduction = 2
+			}
+			if reduction > depth-1 {
+				reduction = depth - 1
+			}
+		}
 
 		search.Pos.DoMove(move)
-		score := -search.alphaBetaInner(-beta, -alpha, depth-1, ply+1)
+		var score int32
+		if reduction > 0 {
+			score = -search.alphaBetaInner(-alpha-1, -alpha, depth-1-reduction, ply+1)
+			if score > alpha {
+				score = -search.alphaBetaInner(-beta, -alpha, depth-1, ply+1)
+			}
+		} else {
+			score = -search.alphaBetaInner(-beta, -alpha, depth-1, ply+1)
+		}
 		search.Pos.UndoMove(move)
 
 		if score >= beta {
