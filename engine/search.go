@@ -194,23 +194,25 @@ func ScoreMoves(pos *Position, moveList *MoveList) {
 }
 
 // swap the highest score move to the front, leaving everything else untouched
+// OrderMoves sorts moveList by score descending (insertion sort: move lists
+// here are small -- at most a few dozen moves -- so this is cheap and
+// needs no allocation). A full sort, not just a best-to-front swap, matters
+// once ordering has more than one signal below the very top: MVV-LVA always
+// outranks killers/history (see maxQuietScore), so a swap-only pass could
+// only ever place a killer/history-favored quiet first in capture-free
+// positions, and even then left every other move in raw movegen order --
+// making killer/history scores irrelevant to move 2 onward, including to
+// which moves LMR treats as "late".
 func OrderMoves(pos *Position, moveList *MoveList) {
-	if moveList.Count <= 1 {
-		return
-	}
-
-	bestIdx := 0
-	bestScore := moveList.Moves[0].Score()
-
-	for j := 1; j < int(moveList.Count); j++ {
-		if moveList.Moves[j].Score() > bestScore {
-			bestIdx = j
-			bestScore = moveList.Moves[j].Score()
+	for i := 1; i < int(moveList.Count); i++ {
+		move := moveList.Moves[i]
+		score := move.Score()
+		j := i - 1
+		for j >= 0 && moveList.Moves[j].Score() < score {
+			moveList.Moves[j+1] = moveList.Moves[j]
+			j--
 		}
-	}
-
-	if bestIdx != 0 {
-		moveList.Moves[0], moveList.Moves[bestIdx] = moveList.Moves[bestIdx], moveList.Moves[0]
+		moveList.Moves[j+1] = move
 	}
 }
 

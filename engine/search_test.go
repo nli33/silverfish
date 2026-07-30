@@ -372,7 +372,11 @@ func TestSearchCapturesHangingPiece(t *testing.T) {
 func TestUciInfoReportsScoreOncePerDepth(t *testing.T) {
 	fen := "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"
 	pos := engine.FromFEN(fen)
-	search := engine.Search{MaxDepth: 4, TimeLimit: engine.InfiniteMovetime}
+	// Depth chosen to comfortably exceed NodeReportInterval so the
+	// unscored-ping assertion below is meaningful -- move ordering
+	// improvements (full-sort OrderMoves, killers/history) make a given
+	// depth cheaper over time, so this may need bumping again later.
+	search := engine.Search{MaxDepth: 6, TimeLimit: engine.InfiniteMovetime}
 	search.Init(&pos)
 
 	var finalScore int32
@@ -407,8 +411,8 @@ func TestUciInfoReportsScoreOncePerDepth(t *testing.T) {
 			t.Errorf("depth %d: got %d scored info lines, want exactly 1", d, count)
 		}
 	}
-	if lastDepth != 4 {
-		t.Errorf("last scored info line was depth %d, want 4 (MaxDepth)", lastDepth)
+	if lastDepth != 6 {
+		t.Errorf("last scored info line was depth %d, want 6 (MaxDepth)", lastDepth)
 	}
 	if lastScore != finalScore {
 		t.Errorf("last scored info line score = %d, want %d (Search()'s returned score)", lastScore, finalScore)
