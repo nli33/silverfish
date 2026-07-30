@@ -1,7 +1,7 @@
 # Silverfish
-[![Build and Test](https://github.com/carpetmaker3162/silverfish/actions/workflows/go.yml/badge.svg)](https://github.com/carpetmaker3162/silverfish/actions/workflows/go.yml)
+[![Build and Test](https://github.com/nli33/silverfish/actions/workflows/go.yml/badge.svg)](https://github.com/nli33/silverfish/actions/workflows/go.yml)
 
-![Logo](https://raw.githubusercontent.com/carpetmaker3162/silverfish/refs/heads/master/logo.svg)
+![Logo](https://raw.githubusercontent.com/nli33/silverfish/refs/heads/master/logo.svg)
 
 UCI Chess Engine (work-in-progress)
 
