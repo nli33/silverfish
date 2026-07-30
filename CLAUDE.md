@@ -51,6 +51,26 @@ geometry mistakes are easy to make by hand and easy to catch with these:
   Stockfish install (must be on `PATH`) for bestmove/score, as an independent
   oracle when sanity-checking a Silverfish move/eval you suspect is wrong.
 
+## Absolute strength (Elo) sweeps
+
+SPRT testing (silverfish vs. silverfish on orca, via `fastchess`) only
+measures strength *relative* to another Silverfish build. To estimate
+absolute Elo, gauntlet the current build against Stockfish at a range of
+`UCI_Elo` levels:
+
+- `tools/elo_sweep.sh [-r ref] [-l levels] [-n rounds] [-c concurrency] [-t tc] [--host orca|local] [--label name] [--wait|--no-wait]`
+  -- builds Silverfish from a given ref (default: current branch), runs a
+  fastchess gauntlet against Stockfish at each level in `-l` (default
+  `1600,1800,2000,2200`), and reports per-level results. `--host orca`
+  (default) cross-compiles and runs remotely over ssh, matching the SPRT
+  workflow below; `--host local` runs on this machine if `fastchess`/
+  `stockfish` are on `PATH`. `--help` for the full flag list.
+  - Uses fastchess CLI flags (`-engine ... option.X=Y`), not a `-config`
+    JSON file -- fastchess's JSON schema doesn't accept per-engine
+    `options` as `{"name":..,"value":..}` objects (errors with `type must
+    be array, but is object`); this was hit and worked around once
+    already, don't re-litigate it.
+
 ## Conventions
 - Commit style: short imperative prefix sometimes used (`fix:`, `feat:`, `style:`, `test:`, `chore:`), but not strictly enforced — many commits are plain descriptions
 - Work happens on feature branches (e.g. `zobrist-threefold`, `king-safety`, `nnue`, `mvv-lva`, `tt`) merged into `master` via PRs
