@@ -25,9 +25,10 @@ Hand-built FENs/tactics are easy to get wrong by eye — verify instead:
 
 ## Strength testing
 Two distinct workflows, don't conflate them:
-- **SPRT** (relative strength, build vs. build) — `fastchess` on remote host `orca` (`ssh orca`, `~/sprt/`) if available; locally if not. Used to validate any change to move selection/ordering before merging.
+- **SPRT** (relative strength, build vs. build) — `tools/sprt_run.sh [-a refA] [-b refB] [--elo0 N] [--elo1 N] [-n rounds] [-c concurrency] [-t tc] [--host orca|local] [--label name] [--wait|--no-wait]`. Used to validate any change to move selection/ordering before merging. `--help` for full flags.
 - **Elo sweep** (absolute strength vs. Stockfish) — `tools/elo_sweep.sh [-r ref] [-l levels] [-n rounds] [-c concurrency] [-t tc] [--host orca|local] [--label name] [--wait|--no-wait]`, gauntlets a build against Stockfish `UCI_Elo` levels. `--help` for full flags.
-- Both use fastchess CLI flags (`-engine ... option.X=Y`), never a JSON `-config` file — fastchess's JSON schema rejects per-engine `options` as `{name,value}` objects. Already hit and worked around; don't re-litigate.
+- Both wrap `fastchess` (remote host `orca` via `ssh orca`, `~/sprt/`, by default; `--host local` if not available) and use CLI flags (`-engine ... option.X=Y`), never a JSON `-config` file — fastchess's JSON schema rejects per-engine `options` as `{name,value}` objects. `-pgnout`/`-log` also need `key=value` form (`-pgnout file=x.pgn`, not `-pgnout x.pgn`)
+- Prefer these scripts over hand-written `ssh`/`fastchess` invocations — less to get wrong.
 - Stockfish's `UCI_Elo` is CCRL-calibrated, not FIDE — treat resulting Elo estimates as a same-species floor, not a human-equivalent number.
 
 ## Conventions
