@@ -73,6 +73,29 @@ type Search struct {
 	StartTime time.Time
 	TimeLimit time.Duration
 	MaxDepth  int
+
+	// timedOut is set once checkTimeUp first detects the budget has been
+	// exceeded, and stays set for the rest of this Search() call. Sticky so
+	// every frame on the way back up the call stack can bail out on a cheap
+	// field read instead of each re-checking time.Since.
+	timedOut bool
+}
+
+// checkTimeUp reports whether the search has exceeded its time budget.
+// Checked periodically (every 2048 nodes, via the low bits of Nodes) rather
+// than on every node -- time.Since on every node would itself be a
+// meaningful overhead. This is what lets alphaBetaInner/Quiescence unwind a
+// single oversized subtree instead of only checking between root moves (see
+// the "go movetime can hang" note in todo.md): a subtree that runs long
+// still gets probed every couple thousand nodes no matter how deep it goes.
+func (search *Search) checkTimeUp() bool {
+	if search.timedOut {
+		return true
+	}
+	if search.Nodes&2047 == 0 && time.Since(search.StartTime) > search.TimeLimit {
+		search.timedOut = true
+	}
+	return search.timedOut
 }
 
 // isQuietMove reports whether move is neither a capture nor a promotion.
@@ -282,6 +305,14 @@ func (search *Search) Search() (int32, Move) {
 			score := -search.alphaBetaInner(-beta, -alpha, depth-1, 1)
 			search.Pos.UndoMove(move)
 
+			// search.timedOut means this move's score is the checkTimeUp
+			// sentinel (0), not a real result -- discard it rather than
+			// letting it compete with bestScoreCurr.
+			if search.timedOut {
+				timedOut = true
+				break
+			}
+
 			// ensure a null move is not chosen (in case of unavoidable checkmate)
 			if score > bestScoreCurr || bestMoveCurr == Move(0) {
 				bestScoreCurr = score
@@ -356,6 +387,10 @@ func (search *Search) Quiescence(alpha, beta int32, qdepth int, ply int) int32 {
 		return Evaluate(&search.Pos)
 	}
 
+	if search.checkTimeUp() {
+		return 0
+	}
+
 	inCheck := search.Pos.Checkers(search.Pos.Turn) != 0
 
 	// Unlike a capture, check can't be declined -- taking a stand-pat floor
@@ -428,6 +463,10 @@ func hasNonPawnMaterial(pos *Position, color uint8) bool {
 // strictly higher than the same mate found deeper in the tree.
 func (search *Search) alphaBetaInner(alpha, beta int32, depth int, ply int) int32 {
 	search.Nodes++
+
+	if search.checkTimeUp() {
+		return 0
+	}
 
 	// Treat the first repetition as a draw rather than waiting for a literal
 	// threefold (standard practice -- see Position.IsRepetition). Checked
@@ -544,10 +583,15 @@ func (search *Search) alphaBetaInner(alpha, beta int32, depth int, ply int) int3
 		search.Pos.UndoMove(move)
 
 		if score >= beta {
-			TTStore(search.Pos.Hash, move, ScoreToTT(score, ply), depth, BoundLower)
-			if isQuietMove(&search.Pos, move) {
-				search.recordKiller(move, ply)
-				search.recordHistory(move, depth)
+			// A timed-out score is 0 by convention (see checkTimeUp), not a
+			// real search result -- storing it would poison the TT with a
+			// bogus cutoff for future probes at this position.
+			if !search.timedOut {
+				TTStore(search.Pos.Hash, move, ScoreToTT(score, ply), depth, BoundLower)
+				if isQuietMove(&search.Pos, move) {
+					search.recordKiller(move, ply)
+					search.recordHistory(move, depth)
+				}
 			}
 			return score
 		}
@@ -585,11 +629,13 @@ func (search *Search) alphaBetaInner(alpha, beta int32, depth int, ply int) int3
 		}
 	}
 
-	bound := BoundExact
-	if bestScore <= alphaOrig {
-		bound = BoundUpper
+	if !search.timedOut {
+		bound := BoundExact
+		if bestScore <= alphaOrig {
+			bound = BoundUpper
+		}
+		TTStore(search.Pos.Hash, bestMove, ScoreToTT(bestScore, ply), depth, bound)
 	}
-	TTStore(search.Pos.Hash, bestMove, ScoreToTT(bestScore, ply), depth, bound)
 
 	return bestScore
 }
