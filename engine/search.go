@@ -486,10 +486,8 @@ func (search *Search) alphaBetaInner(alpha, beta int32, depth int, ply int) int3
 		// Late Move Reductions: search moves that are unlikely to matter --
 		// late in the (MVV-LVA/killer/history-then-TT-move) ordering, quiet,
 		// and not while in check -- at reduced depth first. If a reduced
-		// search still beats alpha, it wasn't obviously bad, so re-search it
-		// at full depth before trusting the score. LeafMoveNum/depth
-		// thresholds are conservative (no PVS yet to lean on for ordering
-		// confidence).
+		// search still beats alpha, it wasn't obviously bad, so it gets
+		// re-verified below before being trusted.
 		reduction := 0
 		if depth >= 3 && legalMoveNum > 3 && !inCheck && isQuietMove(&search.Pos, move) {
 			reduction = 1
@@ -503,13 +501,34 @@ func (search *Search) alphaBetaInner(alpha, beta int32, depth int, ply int) int3
 
 		search.Pos.DoMove(move)
 		var score int32
-		if reduction > 0 {
-			score = -search.alphaBetaInner(-alpha-1, -alpha, depth-1-reduction, ply+1)
-			if score > alpha {
-				score = -search.alphaBetaInner(-beta, -alpha, depth-1, ply+1)
-			}
-		} else {
+		if legalMoveNum == 1 {
+			// PVS: the first move (move ordering's best guess) is trusted
+			// enough to search with the full window right away -- every
+			// later move is a bet that ordering got #1 right, cheaply
+			// checked below instead.
 			score = -search.alphaBetaInner(-beta, -alpha, depth-1, ply+1)
+		} else {
+			// PVS scout: a null window (-alpha-1, -alpha) can only prove
+			// "not better than alpha" or "better than alpha" -- it can't
+			// return an exact score, but that's all that's needed for the
+			// common case where move ordering was right and this move
+			// isn't actually better than what's already found. Only a
+			// scout that beats alpha needs the more expensive re-search
+			// below to get a real score.
+			score = -search.alphaBetaInner(-alpha-1, -alpha, depth-1-reduction, ply+1)
+			if score > alpha && score < beta {
+				if reduction > 0 {
+					// The reduced-depth scout's "beats alpha" could be a
+					// false positive caused by the reduction itself, not
+					// by the move actually being good -- re-verify at
+					// full depth (still a cheap null window) before
+					// paying for a full-window search.
+					score = -search.alphaBetaInner(-alpha-1, -alpha, depth-1, ply+1)
+				}
+				if score > alpha && score < beta {
+					score = -search.alphaBetaInner(-beta, -alpha, depth-1, ply+1)
+				}
+			}
 		}
 		search.Pos.UndoMove(move)
 
