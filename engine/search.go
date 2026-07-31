@@ -265,7 +265,7 @@ func (search *Search) Quiescence(alpha, beta int32, qdepth int, ply int) int32 {
 		moveList = GenMoves(&search.Pos, search.Pos.Sides[search.Pos.Turn^1]) // only captures
 	}
 
-	ScoreMoves(&search.Pos, &moveList)
+	ScoreMovesFast(&search.Pos, &moveList)
 	OrderMoves(&search.Pos, &moveList)
 
 	hasLegal := false

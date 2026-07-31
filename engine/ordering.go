@@ -112,7 +112,9 @@ func clampInt(v, lo, hi int) int {
 // ScoreMoves scores every capture (including en passant, whose victim
 // isn't on the destination square) in moveList using SEE. Non-captures
 // (including quiet promotions) are left unscored here, same as before --
-// they're picked up by scoreQuiets.
+// they're picked up by scoreQuiets. Used for the main search (root and
+// alphaBetaInner) only -- see ScoreMovesFast for why quiescence uses a
+// cheaper heuristic instead.
 func ScoreMoves(pos *Position, moveList *MoveList) {
 	for i := 0; i < int(moveList.Count); i++ {
 		move := &moveList.Moves[i]
@@ -122,6 +124,42 @@ func ScoreMoves(pos *Position, moveList *MoveList) {
 		}
 		value := clampInt(SEE(pos, *move), seeClampMin, seeClampMax)
 		move.GiveScore(captureScoreFloor + (value - seeClampMin))
+	}
+}
+
+// Indexed by the real piece constants (Pawn=0, Knight=1, Bishop=2, Rook=3,
+// Queen=4, King=5, NoPiece=6) on both axes. Row = victim, column = attacker;
+// higher score for a more valuable victim taken by a cheaper attacker. Used
+// only by ScoreMovesFast (quiescence) -- the main search uses real SEE
+// instead (see ScoreMoves).
+var MvvLva = [7][7]int{
+	{15, 14, 13, 12, 11, 10, 0}, // victim P, attacker P, N, B, R, Q, K, None
+	{25, 24, 23, 22, 21, 20, 0}, // victim N, attacker P, N, B, R, Q, K, None
+	{35, 34, 33, 32, 31, 30, 0}, // victim B, attacker P, N, B, R, Q, K, None
+	{45, 44, 43, 42, 41, 40, 0}, // victim R, attacker P, N, B, R, Q, K, None
+	{55, 54, 53, 52, 51, 50, 0}, // victim Q, attacker P, N, B, R, Q, K, None
+	{0, 0, 0, 0, 0, 0, 0},       // victim K, attacker P, N, B, R, Q, K, None (should not occur)
+	{0, 0, 0, 0, 0, 0, 0},       // victim None (quiet move)
+}
+
+// ScoreMovesFast scores captures with MVV-LVA (an O(1) table lookup)
+// instead of SEE. Quiescence calls this, not ScoreMoves: quiescence nodes
+// dominate total node count in alpha-beta search and its movelist is
+// nearly all captures, so SEE's per-move cost (several bitboard ops and
+// magic-lookup-based X-ray checks per capture, versus one table read)
+// compounds heavily there in a way it doesn't in the main search, where
+// nodes are comparatively scarce and precise ordering matters more for
+// cutoffs than raw per-node speed. An initial attempt using SEE
+// everywhere, including quiescence, measured flat-to-better nps on a
+// handful of synthetic fixed-depth positions but regressed real games by
+// roughly -18 to -22 Elo in SPRT (reproduced twice, including after
+// fixing a real SEE bug) -- this split is the fix being tested for that.
+func ScoreMovesFast(pos *Position, moveList *MoveList) {
+	for i := 0; i < int(moveList.Count); i++ {
+		move := &moveList.Moves[i]
+		_, attacker := pos.GetSquare(move.From())
+		_, victim := pos.GetSquare(move.To())
+		move.GiveScore(MvvLva[victim][attacker])
 	}
 }
 
