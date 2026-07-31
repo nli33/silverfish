@@ -119,10 +119,81 @@ func (search *Search) Init(pos *Position) {
 // alpha: best score guaranteed for max-player. can prune branches that give less than this
 // beta: upper limit that min-player will tolerate. min-player will prune lines exceeding this
 
+// aspirationDelta is the initial half-width (in centipawns -- Evaluate's
+// scale, see EvaluateNNUE) of the window centered on the previous
+// iteration's score. Widened (see searchRoot) on a fail-low/fail-high
+// rather than jumping straight to (-Infinity, Infinity), since most
+// re-searches only need a little more room: consecutive iterative-deepening
+// scores are usually close, not wildly different.
+const aspirationDelta = 25
+
+// aspirationMinDepth: aspiration windows aren't used below this depth. A
+// depth-1/2 score is too noisy/unstable to usefully center a narrow window
+// on -- doing so would mostly just cause immediate fail-lows/fail-highs and
+// their re-search cost, with no pruning benefit to offset it.
+const aspirationMinDepth = 4
+
+// searchRoot runs one iterative-deepening depth's root move loop with the
+// given [alpha, beta) window, returning the best move/score found and
+// whether the search timed out partway through. A narrow window (from
+// aspiration) can cause every move to return <= alpha (fail-low) or a move
+// to return >= beta (fail-high) -- in either case bestScoreCurr is only a
+// bound, not the true score, and the caller (Search) is responsible for
+// widening and re-running rather than trusting it as-is.
+func (search *Search) searchRoot(moveList *MoveList, depth int, alpha, beta int32) (score int32, move Move, timedOut bool) {
+	bestScoreCurr := -Infinity
+	var bestMoveCurr Move
+
+	for i := uint8(0); i < moveList.Count; i++ {
+		m := moveList.Moves[i]
+		if !search.Pos.MoveIsLegal(m) {
+			continue
+		}
+
+		search.Pos.DoMove(m)
+		s := -search.alphaBetaInner(-beta, -alpha, depth-1, 1)
+		search.Pos.UndoMove(m)
+
+		// search.timedOut means this move's score is the checkTimeUp
+		// sentinel (0), not a real result -- discard just this move's
+		// score, but keep whatever bestScoreCurr/bestMoveCurr earlier
+		// moves in this same loop already found (the caller may still
+		// need it, e.g. depth 1 timing out after its first move).
+		if search.timedOut {
+			return bestScoreCurr, bestMoveCurr, true
+		}
+
+		// ensure a null move is not chosen (in case of unavoidable checkmate)
+		if s > bestScoreCurr || bestMoveCurr == Move(0) {
+			bestScoreCurr = s
+			bestMoveCurr = m
+		}
+		if s > alpha {
+			alpha = s
+		}
+		// A move that reaches beta means the true score is >= beta --
+		// with a narrow aspiration beta this is a real, expected outcome
+		// (not just an optimization), and the caller needs to see it as
+		// a fail-high (bestScoreCurr >= beta) to widen and re-search
+		// correctly. Stopping here also avoids searching the remaining
+		// root moves against a bound already known to be wrong.
+		if s >= beta {
+			break
+		}
+
+		if time.Since(search.StartTime) > search.TimeLimit {
+			return bestScoreCurr, bestMoveCurr, true
+		}
+	}
+
+	return bestScoreCurr, bestMoveCurr, false
+}
+
 // pass TimeLimit in nanoseconds (default)
 func (search *Search) Search() (int32, Move) {
 	var bestMove Move
 	bestScore := -Infinity
+	prevScore := int32(0)
 
 	search.StartTime = time.Now()
 
@@ -131,9 +202,6 @@ func (search *Search) Search() (int32, Move) {
 	OrderMoves(&search.Pos, &moveList)
 
 	for depth := 1; depth <= search.MaxDepth; depth++ {
-		alpha := -Infinity
-		beta := Infinity
-
 		// Put the previous iteration's best move (stored by this same loop,
 		// one depth ago) first -- gives PV-move-first ordering across
 		// iterative-deepening iterations, not just within a single
@@ -142,40 +210,49 @@ func (search *Search) Search() (int32, Move) {
 			orderMoveFirst(&moveList, entry.Move)
 		}
 
-		bestScoreCurr := -Infinity
+		var alpha, beta int32
+		delta := int32(aspirationDelta)
+		if depth < aspirationMinDepth {
+			alpha, beta = -Infinity, Infinity
+		} else {
+			alpha, beta = max(prevScore-delta, -Infinity), min(prevScore+delta, Infinity)
+		}
+
+		var bestScoreCurr int32
 		var bestMoveCurr Move
-		timedOut := false
+		var timedOut bool
 
-		for i := uint8(0); i < moveList.Count; i++ {
-			move := moveList.Moves[i]
-			if !search.Pos.MoveIsLegal(move) {
-				continue
-			}
-
-			search.Pos.DoMove(move)
-			score := -search.alphaBetaInner(-beta, -alpha, depth-1, 1)
-			search.Pos.UndoMove(move)
-
-			// search.timedOut means this move's score is the checkTimeUp
-			// sentinel (0), not a real result -- discard it rather than
-			// letting it compete with bestScoreCurr.
-			if search.timedOut {
-				timedOut = true
+		for {
+			bestScoreCurr, bestMoveCurr, timedOut = search.searchRoot(&moveList, depth, alpha, beta)
+			if timedOut {
 				break
 			}
 
-			// ensure a null move is not chosen (in case of unavoidable checkmate)
-			if score > bestScoreCurr || bestMoveCurr == Move(0) {
-				bestScoreCurr = score
-				bestMoveCurr = move
-			}
-			if score > alpha {
-				alpha = score
-			}
-
-			if time.Since(search.StartTime) > search.TimeLimit {
-				timedOut = true
+			// Widen and re-search this same depth: a fail-low/fail-high
+			// bound isn't a real score, and searching the next depth on
+			// top of it would build on a wrong result. Doubling delta
+			// each retry converges quickly even after a large swing
+			// (e.g. a newly-seen tactic), and once the window is wide
+			// enough to contain -Infinity or Infinity this degrades to
+			// exactly the old always-full-window behavior, so it can
+			// never fail to converge.
+			failedLow := bestScoreCurr <= alpha && alpha > -Infinity
+			failedHigh := bestScoreCurr >= beta && beta < Infinity
+			if !failedLow && !failedHigh {
 				break
+			}
+			delta *= 4
+			if failedLow {
+				alpha = prevScore - delta
+				if alpha < -Infinity {
+					alpha = -Infinity
+				}
+			}
+			if failedHigh {
+				beta = prevScore + delta
+				if beta > Infinity {
+					beta = Infinity
+				}
 			}
 		}
 
@@ -193,6 +270,9 @@ func (search *Search) Search() (int32, Move) {
 			if bestMoveCurr != Move(0) {
 				bestScore = bestScoreCurr
 				bestMove = bestMoveCurr
+				if !timedOut {
+					prevScore = bestScoreCurr
+				}
 
 				// Only a fully-completed depth's result is trustworthy
 				// enough to mark Exact (a timed-out partial pass didn't
