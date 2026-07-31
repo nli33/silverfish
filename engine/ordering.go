@@ -45,8 +45,9 @@ func (search *Search) recordHistory(move Move, depth int) {
 }
 
 // maxQuietScore is the highest score scoreQuiets ever assigns, kept below
-// MvvLva's lowest nonzero entry (10) so a killer or history-favored quiet
-// can never be ordered ahead of an actual capture.
+// captureScoreFloor (see ScoreMoves) so a killer or history-favored quiet
+// can never be ordered ahead of a capture, regardless of that capture's
+// SEE value.
 const maxQuietScore = 9
 
 // scoreQuiets scores every not-yet-scored (quiet) move in moveList using
@@ -82,26 +83,45 @@ func (search *Search) scoreQuiets(moveList *MoveList, ply int) {
 	}
 }
 
-// Indexed by the real piece constants (Pawn=0, Knight=1, Bishop=2, Rook=3,
-// Queen=4, King=5, NoPiece=6) on both axes. Row = victim, column = attacker;
-// higher score for a more valuable victim taken by a cheaper attacker.
-var MvvLva = [7][7]int{
-	{15, 14, 13, 12, 11, 10, 0}, // victim P, attacker P, N, B, R, Q, K, None
-	{25, 24, 23, 22, 21, 20, 0}, // victim N, attacker P, N, B, R, Q, K, None
-	{35, 34, 33, 32, 31, 30, 0}, // victim B, attacker P, N, B, R, Q, K, None
-	{45, 44, 43, 42, 41, 40, 0}, // victim R, attacker P, N, B, R, Q, K, None
-	{55, 54, 53, 52, 51, 50, 0}, // victim Q, attacker P, N, B, R, Q, K, None
-	{0, 0, 0, 0, 0, 0, 0},       // victim K, attacker P, N, B, R, Q, K, None (should not occur)
-	{0, 0, 0, 0, 0, 0, 0},       // victim None (quiet move)
+// captureScoreFloor/captureScoreCeiling bound the score a capture can get
+// from its (clamped) SEE value, chosen so every capture -- winning, even,
+// or losing -- always scores above maxQuietScore. This keeps captures'
+// existing "always tried before quiets" placement from the old MVV-LVA
+// scheme; only the ranking *among* captures changes, from MVV-LVA's crude
+// victim/attacker-value heuristic to SEE's actual exchange outcome. A
+// separate "deprioritize clearly-losing captures below quiets" tier is a
+// distinct idea with its own tradeoffs, deliberately left for a later,
+// separately-SPRT'd change rather than bundled in here.
+const (
+	seeClampMin         = -2000
+	seeClampMax         = 4000
+	captureScoreFloor   = maxQuietScore + 1
+	captureScoreCeiling = captureScoreFloor + (seeClampMax - seeClampMin)
+)
+
+func clampInt(v, lo, hi int) int {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
 }
 
+// ScoreMoves scores every capture (including en passant, whose victim
+// isn't on the destination square) in moveList using SEE. Non-captures
+// (including quiet promotions) are left unscored here, same as before --
+// they're picked up by scoreQuiets.
 func ScoreMoves(pos *Position, moveList *MoveList) {
 	for i := 0; i < int(moveList.Count); i++ {
 		move := &moveList.Moves[i]
-		_, attacker := pos.GetSquare(move.From())
 		_, victim := pos.GetSquare(move.To())
-		value := MvvLva[victim][attacker]
-		move.GiveScore(value)
+		if victim == NoPiece && !move.IsEnPassant() {
+			continue
+		}
+		value := clampInt(SEE(pos, *move), seeClampMin, seeClampMax)
+		move.GiveScore(captureScoreFloor + (value - seeClampMin))
 	}
 }
 
