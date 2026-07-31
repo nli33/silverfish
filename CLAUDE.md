@@ -37,6 +37,7 @@ Two distinct workflows, don't conflate them:
 ## Conventions
 - Feature branches → PR → merge to `master`. Commit prefixes (`fix:`, `feat:`, etc.) used loosely, not enforced.
 - Any change to move selection/ordering needs an SPRT result before merging, same bar as past search features.
+- **Opening a PR for a strength-affecting change implicitly signals "SPRT'd, OK to merge" — never open one before the SPRT is done.** Non-strength-affecting changes (docs, tooling, refactors, unwired-in foundational code) don't need PR ceremony at all — commit straight to `master`. Reserve PRs for changes that need review/SPRT-gating before merge.
 
 ## PR messages
 - Brief summary up top; skip what's obvious from the diff. Spend words on *why* (design tradeoffs, non-obvious reasoning).
