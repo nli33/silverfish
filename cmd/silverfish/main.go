@@ -33,10 +33,12 @@ func executeGoCommand(channel chan bool, position *engine.Position, command *eng
 	if command.Perft && command.Depth != 0 {
 		engine.UciLog("Perft started.")
 		result := engine.Perft(position, int(command.Depth), true)
-		engine.UciLog(fmt.Sprintf("Perft result: %d", result))
-
-		// Tell the main thread that we're done.
+		// Signal completion before logging: the main loop drops any
+		// message that arrives while `active` is still true, so a fast
+		// client sending its next command right after seeing output on
+		// stdout must never be able to race ahead of this.
 		channel <- true
+		engine.UciLog(fmt.Sprintf("Perft result: %d", result))
 		return
 	}
 
@@ -64,9 +66,15 @@ func executeGoCommand(channel chan bool, position *engine.Position, command *eng
 	var bestMove engine.Move
 	_, bestMove = search.Search()
 
-	engine.UciBestMove(bestMove)
-
+	// Signal completion (clearing `active` in the main loop) before
+	// printing bestmove -- see the comment above in the perft branch. A
+	// client that reacts to "bestmove" on stdout by immediately sending
+	// its next command must never be able to race ahead of `active`
+	// being reset, or that next command (including the next "go") gets
+	// silently dropped and the engine hangs waiting for a command that
+	// will never come.
 	channel <- true
+	engine.UciBestMove(bestMove)
 }
 
 func main() {
