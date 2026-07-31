@@ -392,6 +392,29 @@ func (search *Search) alphaBetaInner(alpha, beta int32, depth int, ply int) int3
 
 	inCheck := inCheckEarly
 
+	// Futility pruning: this close to the horizon, a quiet, non-check-giving
+	// move can only improve the position by a small amount -- if even the
+	// static eval plus a generous margin can't reach alpha, this branch is
+	// almost certainly not going to raise alpha either, so it's skipped
+	// entirely rather than searched. Margins are deliberately more
+	// conservative than a well-tuned modern engine would use (real engines
+	// go much smaller): this engine's move ordering is comparatively weak
+	// (no SEE, no PVS -- both tried and dropped this session after negative
+	// SPRTs), so an aggressive margin risks pruning away moves ordering
+	// hasn't actually ranked well. Gated off near mate scores (a
+	// material-margin argument says nothing reliable about a nearby forced
+	// mate) and never applied to a node's first move (that's move ordering's
+	// best guess, and always gets searched for real).
+	const futilityMaxDepth = 3
+	var futilityMargin = [futilityMaxDepth + 1]int32{0, 150, 300, 450}
+
+	canFutilityPrune := false
+	if depth >= 1 && depth <= futilityMaxDepth && !inCheck &&
+		alpha > -MateScoreThreshold && beta < MateScoreThreshold {
+		staticEval := Evaluate(&search.Pos)
+		canFutilityPrune = staticEval+futilityMargin[depth] <= alpha
+	}
+
 	bestScore := -Infinity
 	var bestMove Move
 	legalMoveNum := 0
@@ -403,6 +426,8 @@ func (search *Search) alphaBetaInner(alpha, beta int32, depth int, ply int) int3
 		hasLegal = true
 		legalMoveNum++
 
+		isQuiet := isQuietMove(&search.Pos, move)
+
 		// Late Move Reductions: search moves that are unlikely to matter --
 		// late in the (MVV-LVA/killer/history-then-TT-move) ordering, quiet,
 		// and not while in check -- at reduced depth first. If a reduced
@@ -411,7 +436,7 @@ func (search *Search) alphaBetaInner(alpha, beta int32, depth int, ply int) int3
 		// thresholds are conservative (no PVS yet to lean on for ordering
 		// confidence).
 		reduction := 0
-		if depth >= 3 && legalMoveNum > 3 && !inCheck && isQuietMove(&search.Pos, move) {
+		if depth >= 3 && legalMoveNum > 3 && !inCheck && isQuiet {
 			reduction = 1
 			if legalMoveNum > 6 {
 				reduction = 2
@@ -422,6 +447,17 @@ func (search *Search) alphaBetaInner(alpha, beta int32, depth int, ply int) int3
 		}
 
 		search.Pos.DoMove(move)
+
+		// The futility skip check needs the post-move position: a move
+		// that looks prunable by material margin alone must still be
+		// searched for real if it gives check (a checking "quiet" move can
+		// be tactically decisive despite costing no material).
+		if canFutilityPrune && legalMoveNum > 1 && isQuiet &&
+			search.Pos.Checkers(search.Pos.Turn) == 0 {
+			search.Pos.UndoMove(move)
+			continue
+		}
+
 		var score int32
 		if reduction > 0 {
 			score = -search.alphaBetaInner(-alpha-1, -alpha, depth-1-reduction, ply+1)
