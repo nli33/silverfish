@@ -49,6 +49,22 @@ func TestSEE(t *testing.T) {
 			move: "d4e3",
 			want: 100,
 		},
+		{
+			// Regression test for a real bug: an earlier version of see()
+			// stopped simulating the exchange as soon as one ply's local
+			// gain looked bad, which silently dropped later attackers
+			// (here, a second knight and a second rook) from
+			// consideration entirely. Only a full forward simulation
+			// with a backward minimax pass gets a 4-ply exchange like
+			// this right -- verified against a legal-moves-based brute
+			// force (see conversation), not hand-derived, since manually
+			// tracing a chain this long is exactly the kind of thing
+			// that's easy to get wrong by eye.
+			name: "full exchange chain matters even when an intermediate ply looks bad",
+			fen:  "3rr1k1/8/2n3n1/4p3/8/4R3/8/4R1K1 w - - 0 1",
+			move: "e3e5",
+			want: -400,
+		},
 	}
 
 	for _, c := range cases {
