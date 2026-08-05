@@ -15,9 +15,12 @@ UCI Chess Engine (work-in-progress)
 - Transposition table (Zobrist hashing)
 - Late move reductions
 - Null-move pruning
+- Futility pruning
 - Killer moves & history heuristic move ordering
+- Lazy SMP multi-threaded search (UCI `Threads` option), shared transposition table with lock-striped concurrent access
 - NNUE Evaluation, (768->256)x2->1 architecture, vertical mirroring, trained with PyTorch
     - Previously: evaluation using material counting + piece-square tables
+    - Self-play data generation for iterative fine-tuning
 
 ## Quickstart
 
