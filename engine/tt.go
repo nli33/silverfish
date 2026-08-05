@@ -1,10 +1,24 @@
 package engine
 
+import (
+	"sync"
+	"sync/atomic"
+)
+
 // Transposition table: caches search results keyed by Position.Hash, so a
 // position reached by a different move order is not re-searched from
 // scratch, and (usually the bigger win) so the best move found last time is
 // available to order search at every node on every iterative-deepening
 // pass.
+//
+// Lazy SMP (see smp.go) shares this table across search goroutines with no
+// synchronization on individual reads/writes other than the shard locks
+// below -- torn reads are caught by the Key check (a torn read essentially
+// never coincides with a matching key), so any surviving corruption just
+// looks like an ordinary probe miss. The shard locks exist only to stop the
+// Go race detector/runtime from tripping over concurrent struct read/write
+// (a real data race on a multi-word struct in Go, unlike on e.g. x86 with
+// aligned words), not because the entry needs to be logically atomic.
 
 const (
 	BoundNone uint8 = iota
@@ -31,6 +45,20 @@ const ttEntrySize = 32 // approx size of TTEntry in bytes, rounded up to a power
 var tt []TTEntry
 var ttMask uint64
 
+// ttShardBits sizes the shard-lock array well below any realistic table size
+// (TTSizeMB=16 gives ~2^19 entries), so lock contention is spread across
+// many shards rather than funneling through one mutex.
+const ttShardBits = 10
+const ttNumShards = 1 << ttShardBits
+
+var ttLocks [ttNumShards]sync.Mutex
+
+// ttSMPActive gates shard locking entirely. Single-threaded search (the
+// common case -- Threads=1) never touches this, so it pays no locking cost
+// at all; it's flipped on only around a multi-goroutine Lazy SMP search (see
+// smp.go).
+var ttSMPActive int32
+
 // allocTT allocates the transposition table. Called from Init().
 func allocTT(sizeMB int) {
 	numEntries := sizeMB * 1024 * 1024 / ttEntrySize
@@ -56,7 +84,18 @@ func ClearTT() {
 // Move field is usable for ordering even when the caller can't use the
 // score itself (e.g. insufficient stored depth).
 func TTProbe(key uint64) (TTEntry, bool) {
-	e := tt[key&ttMask]
+	idx := key & ttMask
+	if atomic.LoadInt32(&ttSMPActive) != 0 {
+		mu := &ttLocks[idx&(ttNumShards-1)]
+		mu.Lock()
+		e := tt[idx]
+		mu.Unlock()
+		if e.Bound == BoundNone || e.Key != key {
+			return TTEntry{}, false
+		}
+		return e, true
+	}
+	e := tt[idx]
 	if e.Bound == BoundNone || e.Key != key {
 		return TTEntry{}, false
 	}
@@ -70,15 +109,21 @@ func TTProbe(key uint64) (TTEntry, bool) {
 // least as deep a search as what's already there.
 func TTStore(key uint64, move Move, score int32, depth int, bound uint8) {
 	idx := key & ttMask
+	entry := TTEntry{
+		Key:   key,
+		Move:  move & 0xffff,
+		Score: score,
+		Depth: int16(depth),
+		Bound: bound,
+	}
+	if atomic.LoadInt32(&ttSMPActive) != 0 {
+		mu := &ttLocks[idx&(ttNumShards-1)]
+		mu.Lock()
+		defer mu.Unlock()
+	}
 	existing := &tt[idx]
 	if existing.Bound == BoundNone || existing.Key != key || int16(depth) >= existing.Depth {
-		*existing = TTEntry{
-			Key:   key,
-			Move:  move & 0xffff,
-			Score: score,
-			Depth: int16(depth),
-			Bound: bound,
-		}
+		*existing = entry
 	}
 }
 
