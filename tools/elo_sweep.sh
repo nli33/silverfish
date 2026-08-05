@@ -12,6 +12,7 @@
 #
 # Options:
 #   -r, --ref REF          Git ref/branch to build silverfish from (default: current branch)
+#       --opt "X=Y,..."    UCI options for the silverfish engine, e.g. "Threads=4"
 #   -l, --levels CSV        Comma-separated Stockfish UCI_Elo levels (default: 1600,1800,2000,2200)
 #   -n, --rounds N          Rounds per opponent, 2 games/round with colors swapped (default: 50)
 #   -c, --concurrency N     fastchess -concurrency (default: 8)
@@ -35,6 +36,7 @@
 set -euo pipefail
 
 REF=""
+OPT=""
 LEVELS="1600,1800,2000,2200"
 ROUNDS=50
 CONCURRENCY=8
@@ -46,6 +48,7 @@ WAIT=1
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -r|--ref) REF="$2"; shift 2 ;;
+    --opt) OPT="$2"; shift 2 ;;
     -l|--levels) LEVELS="$2"; shift 2 ;;
     -n|--rounds) ROUNDS="$2"; shift 2 ;;
     -c|--concurrency) CONCURRENCY="$2"; shift 2 ;;
@@ -54,10 +57,23 @@ while [[ $# -gt 0 ]]; do
     --label) LABEL="$2"; shift 2 ;;
     --wait) WAIT=1; shift ;;
     --no-wait) WAIT=0; shift ;;
-    -h|--help) sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 1 ;;
   esac
 done
+
+# opt_flags converts "X=Y,Z=W" into " option.X=Y option.Z=W" for appending
+# to a fastchess -engine line (see the matching helper in sprt_run.sh).
+opt_flags() {
+  local spec="$1"
+  [[ -z "$spec" ]] && return 0
+  local out="" pair
+  IFS=',' read -ra pairs <<< "$spec"
+  for pair in "${pairs[@]}"; do
+    out+=" option.${pair}"
+  done
+  echo "$out"
+}
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
@@ -111,7 +127,7 @@ if [[ "$HOST" == "orca" ]]; then
   scp "$BIN" "orca:~/sprt/engines/silverfish_$LABEL"
   ssh orca "chmod +x ~/sprt/engines/silverfish_$LABEL"
 
-  ENGINE_ARGS=(-engine cmd="engines/silverfish_$LABEL" name=silverfish)
+  ENGINE_ARGS=(-engine cmd="engines/silverfish_$LABEL" name=silverfish$(opt_flags "$OPT"))
   for elo in "${LEVEL_ARR[@]}"; do
     ENGINE_ARGS+=(-engine cmd=engines/stockfish18 name="sf_$elo" option.UCI_LimitStrength=true option.UCI_Elo="$elo")
   done
@@ -169,7 +185,7 @@ else
   echo "-- building silverfish ($REF) natively"
   build_binary "$BIN" "$(go env GOOS)" "$(go env GOARCH)"
 
-  ENGINE_ARGS=(-engine cmd="$BIN" name=silverfish)
+  ENGINE_ARGS=(-engine cmd="$BIN" name=silverfish$(opt_flags "$OPT"))
   for elo in "${LEVEL_ARR[@]}"; do
     ENGINE_ARGS+=(-engine cmd="$STOCKFISH_BIN" name="sf_$elo" option.UCI_LimitStrength=true option.UCI_Elo="$elo")
   done
