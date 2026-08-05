@@ -10,6 +10,8 @@
 # Options:
 #   -a, --ref-a REF         Git ref/branch for engine A (default: current branch)
 #   -b, --ref-b REF         Git ref/branch for engine B (default: master)
+#       --opt-a "X=Y,..."   UCI options for engine A, e.g. "Threads=4"
+#       --opt-b "X=Y,..."   UCI options for engine B
 #       --elo0 N            SPRT lower bound, "nothing to see" hypothesis (default: 0)
 #       --elo1 N            SPRT upper bound, "worth it" hypothesis (default: 5)
 #   -n, --rounds N          Max rounds, 2 games/round with colors swapped (default: 800)
@@ -47,11 +49,15 @@ TC="10+0.1"
 HOST="orca"
 LABEL=""
 WAIT=1
+OPT_A=""
+OPT_B=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -a|--ref-a) REF_A="$2"; shift 2 ;;
     -b|--ref-b) REF_B="$2"; shift 2 ;;
+    --opt-a) OPT_A="$2"; shift 2 ;;
+    --opt-b) OPT_B="$2"; shift 2 ;;
     --elo0) ELO0="$2"; shift 2 ;;
     --elo1) ELO1="$2"; shift 2 ;;
     -n|--rounds) ROUNDS="$2"; shift 2 ;;
@@ -65,6 +71,19 @@ while [[ $# -gt 0 ]]; do
     *) echo "unknown option: $1" >&2; exit 1 ;;
   esac
 done
+
+# opt_flags converts "X=Y,Z=W" into " option.X=Y option.Z=W" (leading space,
+# empty string for no options) for appending to a fastchess -engine line.
+opt_flags() {
+  local spec="$1"
+  [[ -z "$spec" ]] && return 0
+  local out="" pair
+  IFS=',' read -ra pairs <<< "$spec"
+  for pair in "${pairs[@]}"; do
+    out+=" option.${pair}"
+  done
+  echo "$out"
+}
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
@@ -136,8 +155,8 @@ if [[ "$HOST" == "orca" ]]; then
   # even though the remote process detaches fine -- backgrounding locally
   # and giving it a moment is the workaround.
   ssh orca "cd ~/sprt && nohup ./fastchess/fastchess \
-    -engine cmd=engines/silverfish_${LABEL}_a name=$NAME_A \
-    -engine cmd=engines/silverfish_${LABEL}_b name=$NAME_B \
+    -engine cmd=engines/silverfish_${LABEL}_a name=$NAME_A$(opt_flags "$OPT_A") \
+    -engine cmd=engines/silverfish_${LABEL}_b name=$NAME_B$(opt_flags "$OPT_B") \
     -each tc=$TC \
     -openings file=books/8moves_v3.pgn format=pgn order=random \
     -rounds $ROUNDS -games 2 -repeat \
@@ -188,8 +207,8 @@ else
   LOGFILE="$(mktemp -d)/${LABEL}.log"
   echo "-- running fastchess locally (log: $LOGFILE)"
   "$FASTCHESS_BIN" \
-    -engine cmd="$BIN_A" name="$NAME_A" \
-    -engine cmd="$BIN_B" name="$NAME_B" \
+    -engine cmd="$BIN_A" name="$NAME_A"$(opt_flags "$OPT_A") \
+    -engine cmd="$BIN_B" name="$NAME_B"$(opt_flags "$OPT_B") \
     -each tc="$TC" \
     -openings file="$BOOK" format=pgn order=random \
     -rounds "$ROUNDS" -games 2 -repeat \
