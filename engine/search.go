@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"sync/atomic"
 	"time"
 )
 
@@ -73,6 +74,24 @@ type Search struct {
 	// every frame on the way back up the call stack can bail out on a cheap
 	// field read instead of each re-checking time.Since.
 	timedOut bool
+
+	// stopSignal, if set (see SetStopSignal), is a shared cancellation flag
+	// used by Lazy SMP (smp.go): once the main search thread finishes, it
+	// flips this so any still-running helper threads unwind promptly rather
+	// than running out their own full time budget for no benefit.
+	stopSignal *int32
+
+	// silent suppresses UciInfo output. Set on Lazy SMP helper threads
+	// (smp.go) -- only the main thread's progress/PV is meaningful UCI
+	// output; helpers exist purely to enrich the shared TT.
+	silent bool
+}
+
+// SetStopSignal wires an external cancellation flag into checkTimeUp, in
+// addition to this Search's own time/depth budget. Used by Lazy SMP to stop
+// helper threads once the main thread concludes.
+func (search *Search) SetStopSignal(stop *int32) {
+	search.stopSignal = stop
 }
 
 // checkTimeUp reports whether the search has exceeded its time budget.
@@ -84,6 +103,10 @@ type Search struct {
 // still gets probed every couple thousand nodes no matter how deep it goes.
 func (search *Search) checkTimeUp() bool {
 	if search.timedOut {
+		return true
+	}
+	if search.stopSignal != nil && atomic.LoadInt32(search.stopSignal) != 0 {
+		search.timedOut = true
 		return true
 	}
 	if search.Nodes&2047 == 0 && time.Since(search.StartTime) > search.TimeLimit {
@@ -205,20 +228,22 @@ func (search *Search) Search() (int32, Move) {
 				// Reported once per completed depth, with that depth's own
 				// final score -- not per move, and not a stale score left
 				// over from the previous depth.
-				infoScore := bestScore
-				movesToMate, isMate := mateInfo(bestScore)
-				if isMate {
-					infoScore = movesToMate
+if !search.silent {
+					infoScore := bestScore
+					movesToMate, isMate := mateInfo(bestScore)
+					if isMate {
+						infoScore = movesToMate
+					}
+					UciInfo(UciInfoMessage{
+						depth:    depth,
+						hasDepth: true,
+						score:    infoScore,
+						hasScore: true,
+						isMate:   isMate,
+						nodes:    search.Nodes,
+						hasNodes: true,
+					})
 				}
-				UciInfo(UciInfoMessage{
-					depth:    depth,
-					hasDepth: true,
-					score:    infoScore,
-					hasScore: true,
-					isMate:   isMate,
-					nodes:    search.Nodes,
-					hasNodes: true,
-				})
 			}
 		}
 
@@ -490,7 +515,7 @@ func (search *Search) alphaBetaInner(alpha, beta int32, depth int, ply int) int3
 			alpha = score
 		}
 
-		if search.Nodes-search.lastReportedNodes >= NodeReportInterval {
+		if !search.silent && search.Nodes-search.lastReportedNodes >= NodeReportInterval {
 			search.lastReportedNodes = search.Nodes
 			// No score here: bestScore is this internal node's own
 			// negamax-local value, not the root-relative evaluation UCI's

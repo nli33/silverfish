@@ -295,4 +295,5 @@ func UciSetEngineName(name string) {
 // after `id`/before `uciok`, per the UCI spec.
 func UciOptions() {
 	fmt.Printf("option name EvalFile type string default %s\n", EvalFileDefaultLabel)
+	fmt.Printf("option name Threads type spin default 1 min 1 max 64\n")
 }

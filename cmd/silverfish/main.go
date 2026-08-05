@@ -7,6 +7,7 @@ import (
 	"os"
 	"runtime/pprof"
 	"silverfish/engine"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -64,7 +65,7 @@ func executeGoCommand(channel chan bool, position *engine.Position, command *eng
 	search.Init(position)
 
 	var bestMove engine.Move
-	_, bestMove = search.Search()
+	_, bestMove = engine.SearchLazySMP(&search)
 
 	// Signal completion (clearing `active` in the main loop) before
 	// printing bestmove -- see the comment above in the perft branch. A
@@ -154,7 +155,21 @@ mainloop:
 }
 
 func handleSetOption(opt *engine.UciSetOptionMessage, position *engine.Position) {
-	if opt == nil || !strings.EqualFold(opt.Name, "EvalFile") {
+	if opt == nil {
+		return
+	}
+
+	if strings.EqualFold(opt.Name, "Threads") {
+		n, err := strconv.Atoi(opt.Value)
+		if err != nil || n < 1 {
+			engine.UciError(fmt.Sprintf("invalid Threads value %q", opt.Value))
+			return
+		}
+		engine.Threads = n
+		return
+	}
+
+	if !strings.EqualFold(opt.Name, "EvalFile") {
 		return
 	}
 
