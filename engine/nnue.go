@@ -12,8 +12,25 @@ import (
 
 const (
 	Magic   = "NNUE"
-	Version = 1
+	Version = 2 // bumped: header now carries ArchID (see loadNNUEFromReader)
 )
+
+// Architecture IDs, self-describing which feature scheme a .nnue file's
+// weights were trained for -- distinguishing this from just NumInputs
+// guards against loading a file whose feature *encoding* doesn't match
+// what this build's FeatureIndex actually computes, even if NumInputs
+// happened to coincide (or the file is simply from the wrong architecture
+// generation). See loadNNUEFromReader.
+const (
+	ArchFlat768 uint32 = iota
+	ArchHalfKA
+)
+
+// expectedArchID is which feature scheme this build's FeatureIndex actually
+// computes -- loadNNUEFromReader refuses to load a file trained for a
+// different architecture (e.g. a pre-HalfKA flat768 network) rather than
+// silently producing nonsense evaluations from mismatched feature indices.
+const expectedArchID = ArchHalfKA
 
 // Network holds NNUE weights loaded from a file. It is immutable once
 // loaded and safe to share across Positions; per-position evaluation state
@@ -48,18 +65,45 @@ type Accumulator struct {
 
 // TODO: Accumulator stack
 
-// for black's perspective, the board is flipped for evaluation purposes
-// this way the first layer parameters only has to "learn" how to play one perspective, which helps with generalization (?)
-func FeatureIndex(perspective uint8, pieceColor uint8, pieceType uint8, sq Square) uint16 {
+// FeatureIndex returns the HalfKA feature index for a piece from
+// perspective's point of view, given ownKingSq -- perspective's own king
+// square (unflipped; flipping for Black is done here, same as sq). This is
+// king-relative ("HalfKA"): perspective's own king square buckets the whole
+// feature space, so any move of perspective's own king changes every one of
+// perspective's active feature indices at once, not just that king's own
+// slot -- see needsAccRefresh in position.go, which routes own-king moves
+// to a full accumulator rebuild instead of an incremental update.
+//
+// pieceType must never be King when pieceColor == perspective: the owner's
+// own king isn't a trackable feature at all (it's implied by the king-bucket
+// dimension itself), only the opponent's king is tracked as a normal piece.
+// For black's perspective, the board (and king square) is flipped -- this
+// way the first layer parameters only have to learn one perspective, which
+// helps with generalization.
+func FeatureIndex(perspective uint8, ownKingSq Square, pieceColor uint8, pieceType uint8, sq Square) uint16 {
 	friendly := perspective == pieceColor
+	if friendly && pieceType == King {
+		panic("FeatureIndex: own king is not a trackable feature -- caller must route own-king moves to a full accumulator refresh")
+	}
+
 	pieceIdx := pieceType
 	if !friendly {
 		pieceIdx += 6
 	}
+	// Closes the gap left by excluding "friendly King" (index 5): enemy
+	// piece indices 6..11 (including enemy King) shift down to 5..10, so
+	// the 11 valid piece/color combinations pack into 0..10 with no holes.
+	if pieceIdx > King {
+		pieceIdx--
+	}
+
 	if perspective == Black {
 		sq ^= FlipVertical
+		ownKingSq ^= FlipVertical
 	}
-	return 64*uint16(pieceIdx) + uint16(sq)
+
+	const piecesPerKingBucket = 64 * 11
+	return uint16(ownKingSq)*piecesPerKingBucket + uint16(pieceIdx)*64 + uint16(sq)
 }
 
 // LoadNNUEFile loads a network from a file on disk.
@@ -105,6 +149,14 @@ func loadNNUEFromReader(f io.Reader) (*Network, error) {
 	}
 	if version != Version {
 		return nil, fmt.Errorf("unsupported NNUE version %d", version)
+	}
+
+	var archID uint32
+	if err := binary.Read(f, binary.LittleEndian, &archID); err != nil {
+		return nil, err
+	}
+	if archID != expectedArchID {
+		return nil, fmt.Errorf("NNUE file architecture %d does not match this build's architecture %d (see ArchFlat768/ArchHalfKA)", archID, expectedArchID)
 	}
 
 	// read as uint32 since python wrote 32 bit ints

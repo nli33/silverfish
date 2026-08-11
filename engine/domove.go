@@ -92,6 +92,8 @@ func (pos *Position) DoMove(move Move) {
 	pos.Turn ^= 1
 	pos.Hash ^= TurnKey
 	pos.History = append(pos.History, state)
+
+	pos.flushAccRefresh()
 }
 
 // DoNullMove passes the turn without moving a piece (used by null-move
@@ -164,6 +166,8 @@ func (pos *Position) UndoMove(move Move) {
 	// above, so their hash contributions were never toggled back. Simplest
 	// correct fix is to just restore the exact pre-move hash wholesale.
 	pos.Hash = lastState.Hash
+
+	pos.flushAccRefresh()
 }
 
 // Note: As long as castling rights are updated properly we don't need to check for

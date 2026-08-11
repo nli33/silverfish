@@ -47,6 +47,24 @@ type Position struct {
 	// PutPiece/RemovePiece and DoMove/UndoMove. Used for repetition
 	// detection (IsRepetition).
 	Hash uint64
+
+	// needsAccRefresh[color] is set (by PutPiece/RemovePiece/MovePiece/
+	// CapturePiece/UncapturePiece) when color's own king moves during the
+	// in-progress DoMove/UndoMove call -- HalfKA feature indices are
+	// relative to the owner's own king square, so a king move changes
+	// every one of that perspective's active features at once, not just
+	// the king's own slot, and can't be patched incrementally. Once set,
+	// any other piece touched for that same perspective during the same
+	// call is also skipped (see maybeUpdateOwnAcc) since a full rebuild is
+	// coming anyway and would just redo the work. DoMove/UndoMove call
+	// flushAccRefresh() before returning; other direct callers of those
+	// five piece-mutation functions must do the same or risk a stale
+	// accumulator. FromFEN and PutPiecesBB don't use this mechanism at all
+	// -- they build a position from an empty board in arbitrary order, so
+	// they go through putPieceBoardOnly/removePieceBoardOnly (no
+	// accumulator work) and an unconditional refreshAccPerspective call
+	// for both colors once the board is complete instead.
+	needsAccRefresh [2]bool
 }
 
 type State struct {
@@ -80,15 +98,98 @@ func (pos *Position) Clone() Position {
 	return clone
 }
 
-func (pos *Position) PutPiece(sq Square, piece uint8, color uint8) {
+// ownKingSq returns perspective's own king square. Only ever called when
+// that king is actually on the board (exactly one bit set in
+// Pieces[perspective][King]) -- see maybeUpdateOwnAcc, which is what
+// guarantees that.
+func (pos *Position) ownKingSq(perspective uint8) Square {
+	return Lsb(pos.Pieces[perspective][King])
+}
+
+// maybeUpdateOwnAcc reports whether the caller should still do a normal
+// incremental accumulator update for perspective's own half, given a piece
+// of color == perspective is being placed/removed/moved. If piece is a
+// King, perspective's own king is moving -- every one of perspective's
+// active HalfKA feature indices changes at once (they're all relative to
+// perspective's own king square), so this can't be patched incrementally;
+// instead it flags perspective for a full rebuild (see needsAccRefresh,
+// flushAccRefresh) and returns false. If a rebuild is already pending for
+// perspective (e.g. a rook moved as part of the same castling move that
+// already touched the king), also returns false -- any incremental work
+// here would just be redone by the eventual full refresh, and doing it
+// anyway would need perspective's king square, which may be transiently
+// off the board mid-castle.
+func (pos *Position) maybeUpdateOwnAcc(perspective uint8, piece uint8) bool {
+	if piece == King {
+		pos.needsAccRefresh[perspective] = true
+		return false
+	}
+	return !pos.needsAccRefresh[perspective]
+}
+
+// flushAccRefresh performs any accumulator rebuilds queued by
+// maybeUpdateOwnAcc (own-king moves) since the last flush. Must be called
+// once after every sequence of board mutations that can move a king --
+// DoMove, UndoMove, FromFEN, and PutPiecesBB all call this before
+// returning; other direct callers of PutPiece/RemovePiece/MovePiece/
+// CapturePiece/UncapturePiece must do the same or risk a stale accumulator.
+func (pos *Position) flushAccRefresh() {
+	for color := White; color <= Black; color++ {
+		if !pos.needsAccRefresh[color] {
+			continue
+		}
+		pos.refreshAccPerspective(color)
+		pos.needsAccRefresh[color] = false
+	}
+}
+
+// refreshAccPerspective rebuilds perspective's accumulator half from
+// scratch off the current board state (all pieces, both colors, excluding
+// perspective's own king -- never a tracked feature, see FeatureIndex).
+func (pos *Position) refreshAccPerspective(perspective uint8) {
+	// Real game positions always have exactly one king per side, but some
+	// existing tests build deliberately incomplete positions (e.g. a
+	// movegen fixture with no king at all) via FromFEN/PutPiecesBB purely
+	// to exercise movegen in isolation -- never intending to call Evaluate
+	// on them. There's no valid king bucket without a king, so there's no
+	// valid NNUE evaluation either; leave this perspective at bias-only
+	// (same as a fresh Reset) rather than computing on a bogus Square(64).
+	if pos.Pieces[perspective][King] == 0 {
+		copy(pos.Acc.Values[perspective], pos.Net.BInput)
+		return
+	}
+
+	kingSq := pos.ownKingSq(perspective)
+	features := make([]uint16, 0, 32)
+	for color := White; color <= Black; color++ {
+		for piece := Pawn; piece <= King; piece++ {
+			if color == perspective && piece == King {
+				continue
+			}
+			bb := pos.Pieces[color][piece]
+			for bb != 0 {
+				sq := PopLsb(&bb)
+				features = append(features, FeatureIndex(perspective, kingSq, color, piece, sq))
+			}
+		}
+	}
+	pos.Acc.Refresh(pos.Net, features, perspective)
+}
+
+// putPieceBoardOnly mutates board/bitboard/hash state only -- no NNUE
+// accumulator work. Used directly by FromFEN and PutPiecesBB, which build a
+// position from an empty board one piece at a time in whatever order the
+// input happens to list pieces in: under HalfKA, a piece placed for one
+// color may need the *opponent's* king square before that king has even
+// been placed yet, which is invalid mid-construction (see
+// refreshAccPerspective) -- unlike DoMove/UndoMove, where both kings are
+// always already on the board (a single piece moves at a time, never from
+// an empty position). Callers must place every piece via this (or
+// PutPiece) and then rebuild the accumulator once at the end from the
+// complete board, after both kings are guaranteed present.
+func (pos *Position) putPieceBoardOnly(sq Square, piece uint8, color uint8) {
 	sqBB := Bitboard(1 << sq)
 	pos.Pieces[color][piece] |= sqBB
-
-	// nnue operations come before this adjustment by 10 (0-5 expected; FeatureIndex performs adjustment by 6)
-	fWhite := FeatureIndex(White, color, piece, sq)
-	fBlack := FeatureIndex(Black, color, piece, sq)
-	pos.Acc.Add(pos.Net, fWhite, White)
-	pos.Acc.Add(pos.Net, fBlack, Black)
 
 	if color == Black {
 		piece += 10
@@ -100,6 +201,18 @@ func (pos *Position) PutPiece(sq Square, piece uint8, color uint8) {
 	pos.Hash ^= pieceSqKey(sq, piece)
 }
 
+func (pos *Position) PutPiece(sq Square, piece uint8, color uint8) {
+	other := color ^ 1
+	if pos.maybeUpdateOwnAcc(color, piece) {
+		f := FeatureIndex(color, pos.ownKingSq(color), color, piece, sq)
+		pos.Acc.Add(pos.Net, f, color)
+	}
+	fOther := FeatureIndex(other, pos.ownKingSq(other), color, piece, sq)
+	pos.Acc.Add(pos.Net, fOther, other)
+
+	pos.putPieceBoardOnly(sq, piece, color)
+}
+
 func (pos *Position) PutPiecesBB(pieces [2][6]Bitboard) {
 	// this check is for testing purposes only
 	// .. well this whole function is for testing purposes only
@@ -108,21 +221,31 @@ func (pos *Position) PutPiecesBB(pieces [2][6]Bitboard) {
 		pos.Acc = NewAccumulator(pos.Net)
 	}
 
+	// Board-only placement (see putPieceBoardOnly/removePieceBoardOnly):
+	// this rebuilds the whole board from scratch, square by square, so
+	// under HalfKA a piece placed for one color may need the opponent's
+	// king square before that king has even been placed yet -- invalid
+	// mid-construction. Rebuild the accumulator once at the end instead,
+	// once both kings are guaranteed present.
 	for sq := SquareA1; sq <= SquareH8; sq++ {
-		// RemovePiece panics on an already-empty square (NoColor indexes
-		// pos.Sides out of bounds), so only call it where there's something
-		// to remove -- relevant when reusing the same Position across calls.
+		// removePieceBoardOnly on an already-empty square would read
+		// NoColor/garbage piece data, so only call it where there's
+		// something to remove -- relevant when reusing the same Position
+		// across calls.
 		if pos.Board[sq] != NoPiece {
-			pos.RemovePiece(sq)
+			pos.removePieceBoardOnly(sq)
 		}
 		for piece := Pawn; piece <= King; piece++ {
 			for color := White; color <= Black; color++ {
 				if pieces[color][piece]&(1<<sq) != 0 {
-					pos.PutPiece(sq, piece, color)
+					pos.putPieceBoardOnly(sq, piece, color)
 				}
 			}
 		}
 	}
+
+	pos.refreshAccPerspective(White)
+	pos.refreshAccPerspective(Black)
 }
 
 // MovePiece relocates a piece from one square to another (no capture, no
@@ -148,12 +271,17 @@ func (pos *Position) MovePiece(from, to Square, piece, color uint8) {
 	pos.Hash ^= pieceSqKey(from, boardPieceFrom)
 	pos.Hash ^= pieceSqKey(to, boardPieceTo)
 
-	fWhiteFrom := FeatureIndex(White, color, piece, from)
-	fBlackFrom := FeatureIndex(Black, color, piece, from)
-	fWhiteTo := FeatureIndex(White, color, piece, to)
-	fBlackTo := FeatureIndex(Black, color, piece, to)
-	pos.Acc.AddSub(pos.Net, fWhiteTo, fWhiteFrom, White)
-	pos.Acc.AddSub(pos.Net, fBlackTo, fBlackFrom, Black)
+	other := color ^ 1
+	if pos.maybeUpdateOwnAcc(color, piece) {
+		kingSq := pos.ownKingSq(color)
+		fFrom := FeatureIndex(color, kingSq, color, piece, from)
+		fTo := FeatureIndex(color, kingSq, color, piece, to)
+		pos.Acc.AddSub(pos.Net, fTo, fFrom, color)
+	}
+	otherKingSq := pos.ownKingSq(other)
+	fOtherFrom := FeatureIndex(other, otherKingSq, color, piece, from)
+	fOtherTo := FeatureIndex(other, otherKingSq, color, piece, to)
+	pos.Acc.AddSub(pos.Net, fOtherTo, fOtherFrom, other)
 }
 
 // CapturePiece relocates a piece from one square to another while capturing
@@ -185,15 +313,20 @@ func (pos *Position) CapturePiece(from, to Square, piece, color, capturedPiece u
 	pos.Hash ^= pieceSqKey(to, boardPieceTo)
 	pos.Hash ^= pieceSqKey(to, newBoardPieceTo)
 
-	fWhiteFrom := FeatureIndex(White, color, piece, from)
-	fBlackFrom := FeatureIndex(Black, color, piece, from)
-	fWhiteTo := FeatureIndex(White, color, piece, to)
-	fBlackTo := FeatureIndex(Black, color, piece, to)
-	fWhiteCaptured := FeatureIndex(White, theirColor, capturedPiece, to)
-	fBlackCaptured := FeatureIndex(Black, theirColor, capturedPiece, to)
-
-	pos.Acc.AddSubSub(pos.Net, fWhiteTo, fWhiteFrom, fWhiteCaptured, White)
-	pos.Acc.AddSubSub(pos.Net, fBlackTo, fBlackFrom, fBlackCaptured, Black)
+	// capturedPiece is never King (kings can't be captured in a legal
+	// game), so only the mover (piece) can trigger a refresh here.
+	if pos.maybeUpdateOwnAcc(color, piece) {
+		kingSq := pos.ownKingSq(color)
+		fFrom := FeatureIndex(color, kingSq, color, piece, from)
+		fTo := FeatureIndex(color, kingSq, color, piece, to)
+		fCaptured := FeatureIndex(color, kingSq, theirColor, capturedPiece, to)
+		pos.Acc.AddSubSub(pos.Net, fTo, fFrom, fCaptured, color)
+	}
+	theirKingSq := pos.ownKingSq(theirColor)
+	fTheirFrom := FeatureIndex(theirColor, theirKingSq, color, piece, from)
+	fTheirTo := FeatureIndex(theirColor, theirKingSq, color, piece, to)
+	fTheirCaptured := FeatureIndex(theirColor, theirKingSq, theirColor, capturedPiece, to)
+	pos.Acc.AddSubSub(pos.Net, fTheirTo, fTheirFrom, fTheirCaptured, theirColor)
 }
 
 // UncapturePiece is the inverse of CapturePiece: it moves a piece from `to`
@@ -227,21 +360,31 @@ func (pos *Position) UncapturePiece(from, to Square, piece, color, capturedPiece
 	pos.Hash ^= pieceSqKey(from, newBoardPieceFrom)
 	pos.Hash ^= pieceSqKey(to, newBoardPieceTo)
 
-	fWhiteFrom := FeatureIndex(White, color, piece, from)
-	fBlackFrom := FeatureIndex(Black, color, piece, from)
-	fWhiteTo := FeatureIndex(White, color, piece, to)
-	fBlackTo := FeatureIndex(Black, color, piece, to)
-	fWhiteCaptured := FeatureIndex(White, theirColor, capturedPiece, to)
-	fBlackCaptured := FeatureIndex(Black, theirColor, capturedPiece, to)
-
-	pos.Acc.AddAddSub(pos.Net, fWhiteFrom, fWhiteCaptured, fWhiteTo, White)
-	pos.Acc.AddAddSub(pos.Net, fBlackFrom, fBlackCaptured, fBlackTo, Black)
+	// capturedPiece is never King, so only the mover (piece) can trigger a
+	// refresh here -- same reasoning as CapturePiece, which this undoes.
+	if pos.maybeUpdateOwnAcc(color, piece) {
+		kingSq := pos.ownKingSq(color)
+		fFrom := FeatureIndex(color, kingSq, color, piece, from)
+		fTo := FeatureIndex(color, kingSq, color, piece, to)
+		fCaptured := FeatureIndex(color, kingSq, theirColor, capturedPiece, to)
+		pos.Acc.AddAddSub(pos.Net, fFrom, fCaptured, fTo, color)
+	}
+	theirKingSq := pos.ownKingSq(theirColor)
+	fTheirFrom := FeatureIndex(theirColor, theirKingSq, color, piece, from)
+	fTheirTo := FeatureIndex(theirColor, theirKingSq, color, piece, to)
+	fTheirCaptured := FeatureIndex(theirColor, theirKingSq, theirColor, capturedPiece, to)
+	pos.Acc.AddAddSub(pos.Net, fTheirFrom, fTheirCaptured, fTheirTo, theirColor)
 }
 
-func (pos *Position) RemovePiece(sq Square) {
+// removePieceBoardOnly mutates board/bitboard/hash state only -- no NNUE
+// accumulator work. Returns the removed piece's (color, piece) so the
+// caller can do accumulator work separately if it wants to (see
+// RemovePiece), or skip it entirely (see FromFEN/PutPiecesBB's use --
+// same reasoning as putPieceBoardOnly).
+func (pos *Position) removePieceBoardOnly(sq Square) (color uint8, piece uint8) {
 	boardPiece := pos.Board[sq] // pre-adjustment (0-5 white, 10-15 black), for the hash key
-	piece := boardPiece
-	color := ColorOf(piece)
+	piece = boardPiece
+	color = ColorOf(piece)
 	if color == Black {
 		piece -= 10
 	}
@@ -254,12 +397,25 @@ func (pos *Position) RemovePiece(sq Square) {
 	}
 
 	pos.Hash ^= pieceSqKey(sq, boardPiece)
+	return color, piece
+}
 
-	// nnue operations come after this adjustment by 10 (0-5 expected; FeatureIndex performs adjustment by 6)
-	fWhite := FeatureIndex(White, color, piece, sq)
-	fBlack := FeatureIndex(Black, color, piece, sq)
-	pos.Acc.Remove(pos.Net, fWhite, White)
-	pos.Acc.Remove(pos.Net, fBlack, Black)
+func (pos *Position) RemovePiece(sq Square) {
+	color, piece := pos.removePieceBoardOnly(sq)
+
+	// Guarded like the Pieces bitboard update above: color can be NoColor
+	// if this were ever called on an already-empty square (not reachable
+	// from DoMove/UndoMove -- see PutPiecesBB's guard, the one call site
+	// that could reach it).
+	if color != NoColor {
+		other := color ^ 1
+		if pos.maybeUpdateOwnAcc(color, piece) {
+			f := FeatureIndex(color, pos.ownKingSq(color), color, piece, sq)
+			pos.Acc.Remove(pos.Net, f, color)
+		}
+		fOther := FeatureIndex(other, pos.ownKingSq(other), color, piece, sq)
+		pos.Acc.Remove(pos.Net, fOther, other)
+	}
 }
 
 func (pos *Position) Equals(otherPos Position) bool {

@@ -85,8 +85,8 @@ func FromFEN(fen string) Position {
 	}
 	pos.Net = defaultNet
 	pos.Acc = NewAccumulator(pos.Net)
-	// install input bias before any Add/Remove
-	pos.Acc.Reset(pos.Net)
+	// Bias is installed by the refreshAccPerspective calls below, once the
+	// board is fully populated -- see the board-only placement loop.
 
 	parts := strings.Split(fen, " ")
 	if len(parts) < 6 {
@@ -132,10 +132,18 @@ func FromFEN(fen string) Position {
 			}
 
 			sq := NewSquare(rank, file)
-			pos.PutPiece(sq, piece, color)
+			pos.putPieceBoardOnly(sq, piece, color)
 			file++
 		}
 	}
+	// Board-only placement above (see putPieceBoardOnly): a FEN's piece
+	// order isn't guaranteed to place either king first, and under HalfKA
+	// a piece needs its perspective's own king square to compute a feature
+	// index at all -- invalid before that king is on the board. Rebuild
+	// the accumulator once here instead, now that both kings are
+	// guaranteed present.
+	pos.refreshAccPerspective(White)
+	pos.refreshAccPerspective(Black)
 
 	switch turnPart {
 	case "w":
