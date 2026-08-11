@@ -203,7 +203,12 @@ func EvaluateHCE(pos *Position) int32 {
 }
 
 func EvaluateNNUE(pos *Position) int32 {
-	return int32(pos.Acc.Evaluate(pos.Net, pos.Turn) * 1000)
+	// Blockers is every occupied square (both colors, all piece types
+	// including kings) -- subtract the 2 kings, always exactly one per
+	// side in a legal position, to get the output-bucket piece count
+	// (see Network.outputBucket).
+	pieceCount := bits.OnesCount64(uint64(pos.Blockers)) - 2
+	return int32(pos.Acc.Evaluate(pos.Net, pos.Turn, pieceCount) * 1000)
 }
 
 func Evaluate(pos *Position) int32 {

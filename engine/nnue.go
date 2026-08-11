@@ -12,7 +12,7 @@ import (
 
 const (
 	Magic   = "NNUE"
-	Version = 2 // bumped: header now carries ArchID (see loadNNUEFromReader)
+	Version = 3 // bumped: header now carries NumOutputBuckets (see loadNNUEFromReader)
 )
 
 // Architecture IDs, self-describing which feature scheme a .nnue file's
@@ -36,19 +36,38 @@ const expectedArchID = ArchHalfKA
 // loaded and safe to share across Positions; per-position evaluation state
 // lives in Accumulator instead.
 type Network struct {
-	NumInputs int
-	L1        int
+	NumInputs        int
+	L1               int
+	NumOutputBuckets int
 
 	WInput  []float32 // [L1 * NumInputs]
 	BInput  []float32 // [L1]
-	WOutput []float32 // [2 * L1]
-	BOutput float32
+	WOutput []float32 // [NumOutputBuckets * 2 * L1], bucket b's row is WOutput[b*2*L1 : (b+1)*2*L1]
+	BOutput []float32 // [NumOutputBuckets]
 
 	// FeatureCols is WInput transposed into per-feature columns, laid out
 	// as one flat contiguous slice ([NumInputs * L1]) rather than a slice
 	// of slices, so column access avoids an extra pointer indirection and
 	// keeps neighboring columns cache-adjacent.
 	FeatureCols []float32
+}
+
+// outputBucket buckets a position by its non-king piece count -- fewer
+// pieces on the board (more endgame-like) route to a different output
+// row/bias than a fuller board, letting the net specialize per phase at
+// negligible extra cost. Must stay bit-for-bit consistent with the
+// training repo's bucket() (same formula, same NumOutputBuckets=8 for the
+// HalfKA architecture; flat768 networks have NumOutputBuckets=1, so this
+// always returns 0 for them regardless of piece count).
+func (net *Network) outputBucket(pieceCount int) int {
+	if net.NumOutputBuckets <= 1 {
+		return 0
+	}
+	b := pieceCount * net.NumOutputBuckets / 32
+	if b >= net.NumOutputBuckets {
+		b = net.NumOutputBuckets - 1
+	}
+	return b
 }
 
 // featureCol returns the L1-length column of weights for feature f.
@@ -160,16 +179,20 @@ func loadNNUEFromReader(f io.Reader) (*Network, error) {
 	}
 
 	// read as uint32 since python wrote 32 bit ints
-	var numInputs32, l132 uint32
+	var numInputs32, l132, numOutputBuckets32 uint32
 	if err := binary.Read(f, binary.LittleEndian, &numInputs32); err != nil {
 		return nil, err
 	}
 	if err := binary.Read(f, binary.LittleEndian, &l132); err != nil {
 		return nil, err
 	}
+	if err := binary.Read(f, binary.LittleEndian, &numOutputBuckets32); err != nil {
+		return nil, err
+	}
 
 	numInputs := int(numInputs32)
 	l1 := int(l132)
+	numOutputBuckets := int(numOutputBuckets32)
 
 	// the accumulator update loops are unrolled in steps of 16
 	if numInputs <= 0 {
@@ -178,16 +201,21 @@ func loadNNUEFromReader(f io.Reader) (*Network, error) {
 	if l1 <= 0 || l1%16 != 0 {
 		return nil, fmt.Errorf("invalid NNUE header: L1 must be a positive multiple of 16, got %d", l1)
 	}
+	if numOutputBuckets <= 0 {
+		return nil, fmt.Errorf("invalid NNUE header: numOutputBuckets must be positive, got %d", numOutputBuckets)
+	}
 
 	net := &Network{
-		NumInputs: numInputs,
-		L1:        l1,
+		NumInputs:        numInputs,
+		L1:               l1,
+		NumOutputBuckets: numOutputBuckets,
 	}
 
 	// read network parameters
 	net.WInput = make([]float32, l1*numInputs)
 	net.BInput = make([]float32, l1)
-	net.WOutput = make([]float32, 2*l1)
+	net.WOutput = make([]float32, numOutputBuckets*2*l1)
+	net.BOutput = make([]float32, numOutputBuckets)
 
 	if err := binary.Read(f, binary.LittleEndian, &net.WInput); err != nil {
 		return nil, err
@@ -420,18 +448,24 @@ func (acc *Accumulator) AddAddSub(net *Network, addFeature1, addFeature2, subFea
 	}
 }
 
-func (acc *Accumulator) Evaluate(net *Network, side uint8) float32 {
+// Evaluate returns net's output for side to move, given pieceCount (total
+// non-king pieces on the board, both colors -- see Network.outputBucket)
+// selecting which output row/bias to use.
+func (acc *Accumulator) Evaluate(net *Network, side uint8, pieceCount int) float32 {
 	ourAcc := acc.Values[side]
 	theirAcc := acc.Values[1-side]
 	var result float32 = 0.0
 
+	bucket := net.outputBucket(pieceCount)
+	wOut := net.WOutput[bucket*2*net.L1 : (bucket+1)*2*net.L1]
+
 	// ReLU before output layer
 	for i := 0; i < net.L1; i++ {
-		result += net.WOutput[i] * max(ourAcc[i], 0.0)
+		result += wOut[i] * max(ourAcc[i], 0.0)
 	}
 	for j := 0; j < net.L1; j++ {
-		result += net.WOutput[net.L1+j] * max(theirAcc[j], 0.0)
+		result += wOut[net.L1+j] * max(theirAcc[j], 0.0)
 	}
-	result += net.BOutput
+	result += net.BOutput[bucket]
 	return result
 }
