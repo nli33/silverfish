@@ -12,21 +12,22 @@ import (
 	"silverfish/engine"
 )
 
-// captureStdout redirects os.Stdout for the duration of fn and returns
-// everything written to it -- UciInfo prints directly to stdout, so this is
-// the only way to observe the search-progress messages it emits.
+// captureStdout redirects engine.Output for the duration of fn and returns
+// everything written to it -- UciInfo prints there (engine.Output, not
+// literal stdout, so it can be retargeted for e.g. the wasm build), so this
+// is the only way to observe the search-progress messages it emits.
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
 	r, w, err := os.Pipe()
 	if err != nil {
 		t.Fatalf("os.Pipe: %v", err)
 	}
-	old := os.Stdout
-	os.Stdout = w
+	old := engine.Output
+	engine.Output = w
 
 	fn()
 
-	os.Stdout = old
+	engine.Output = old
 	w.Close()
 	var buf bytes.Buffer
 	io.Copy(&buf, r)

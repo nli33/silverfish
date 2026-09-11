@@ -3,9 +3,16 @@ package engine
 import (
 	"bufio"
 	"fmt"
+	"io"
+	"os"
 	"strconv"
 	"strings"
 )
+
+// Output is where UCI responses are written. Defaults to stdout for the
+// native CLI; the wasm build points this at a JS-callback-backed writer
+// instead, since there's no stdout to speak of in the browser.
+var Output io.Writer = os.Stdout
 
 type UciGoMessage struct {
 	// When true, the engine should search infinitely
@@ -234,15 +241,15 @@ func UciProcessClientMessage(stdin *bufio.Scanner) UciClientMessage {
 }
 
 func UciOk() {
-	fmt.Println("uciok")
+	fmt.Fprintln(Output, "uciok")
 }
 
 func UciReadyOk() {
-	fmt.Println("readyok")
+	fmt.Fprintln(Output, "readyok")
 }
 
 func UciBestMove(move Move) {
-	fmt.Printf("bestmove %s\n", move.ToString())
+	fmt.Fprintf(Output, "bestmove %s\n", move.ToString())
 }
 
 func UciInfo(info UciInfoMessage) {
@@ -272,28 +279,28 @@ func UciInfo(info UciInfoMessage) {
 		message += fmt.Sprintf(" score mate %d", info.score)
 	}
 
-	fmt.Println(message)
+	fmt.Fprintln(Output, message)
 }
 
 func UciLog(message string) {
-	fmt.Printf("info string %s\n", message)
+	fmt.Fprintf(Output, "info string %s\n", message)
 }
 
 func UciError(message string) {
-	fmt.Printf("info error %s\n", message)
+	fmt.Fprintf(Output, "info error %s\n", message)
 }
 
 func UciSetAuthor(name string) {
-	fmt.Printf("id author %s\n", name)
+	fmt.Fprintf(Output, "id author %s\n", name)
 }
 
 func UciSetEngineName(name string) {
-	fmt.Printf("id name %s\n", name)
+	fmt.Fprintf(Output, "id name %s\n", name)
 }
 
 // UciOptions prints the engine's supported `option` lines. Should be sent
 // after `id`/before `uciok`, per the UCI spec.
 func UciOptions() {
-	fmt.Printf("option name EvalFile type string default %s\n", EvalFileDefaultLabel)
-	fmt.Printf("option name Threads type spin default 1 min 1 max 64\n")
+	fmt.Fprintf(Output, "option name EvalFile type string default %s\n", EvalFileDefaultLabel)
+	fmt.Fprintf(Output, "option name Threads type spin default 1 min 1 max 64\n")
 }
