@@ -18,8 +18,7 @@ UCI Chess Engine (work-in-progress)
 - Futility pruning
 - Killer moves & history heuristic move ordering
 - Lazy SMP multi-threaded search (UCI `Threads` option), shared transposition table with lock-striped concurrent access
-- NNUE Evaluation, HalfKA king-relative feature encoding with output buckets, vertical mirroring, trained with PyTorch
-    - Previously: flat 768-input (768->256)x2->1 architecture
+- NNUE Evaluation, (768->256)x2->1 architecture, vertical mirroring, trained with PyTorch
     - Previously: evaluation using material counting + piece-square tables
     - Self-play data generation for iterative fine-tuning
 
